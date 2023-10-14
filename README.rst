@@ -3,7 +3,7 @@ Introduction
 
 
 .. image:: https://readthedocs.org/projects/adafruit-circuitpython-templateengine/badge/?version=latest
-    :target: https://docs.circuitpython.org/projects/templateengine/en/latest/
+    :target: https://docs.circuitpython.org/projects/template-engine/en/latest/
     :alt: Documentation Status
 
 
