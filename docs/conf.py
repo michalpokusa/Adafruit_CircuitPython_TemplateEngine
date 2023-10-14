@@ -124,6 +124,7 @@ if not on_rtd:  # only import and set the theme if we're building docs locally
         html_theme = "default"
         html_theme_path = ["."]
 else:
+    html_theme = "default"
     html_theme_path = ["."]
 
 # Add any paths that contain custom static files (such as style sheets) here,
