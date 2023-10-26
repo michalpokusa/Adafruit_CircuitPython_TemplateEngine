@@ -192,7 +192,7 @@ def _resolve_includes(template: str):
         # TODO: Restrict include to specific directory
 
         if not _exists_and_is_file(template_path):
-            raise FileNotFoundError(f"Include template not found: {template_path}")
+            raise OSError(f"Include template not found: {template_path}")
 
         # Replace the include with the template content
         with open(template_path, "rt", encoding="utf-8") as template_file:
