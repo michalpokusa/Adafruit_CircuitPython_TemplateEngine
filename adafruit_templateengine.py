@@ -165,32 +165,34 @@ _PRECOMPILED_BLOCK_COMMENT_PATTERN = re.compile(
 _PRECOMPILED_TOKEN_PATTERN = re.compile(r"{{ .+? }}|{% .+? %}")
 
 
-def _find_next_extends(template: str):
+def _find_next_extends(template: bytes) -> "re.Match[bytes]":
     return _PRECOMPILED_EXTENDS_PATTERN.search(template)
 
 
-def _find_next_block(template: str):
+def _find_next_block(template: bytes) -> "re.Match[bytes]":
     return _PRECOMPILED_BLOCK_PATTERN.search(template)
 
 
-def _find_next_include(template: str):
+def _find_next_include(template: bytes) -> "re.Match[bytes]":
     return _PRECOMPILED_INCLUDE_PATTERN.search(template)
 
 
-def _find_named_endblock(template: str, name: str):
-    return re.search(r"{% endblock " + name + r" %}", template)
+def _find_named_endblock(template: bytes, name: bytes) -> "re.Match[bytes]":
+    return re.search(
+        r"{% endblock ".encode("utf-8") + name + r" %}".encode("utf-8"), template
+    )
 
 
-def _exists_and_is_file(path: str):
+def _exists_and_is_file(path: str) -> bool:
     try:
         return (os.stat(path)[0] & 0b_11110000_00000000) == 0b_10000000_00000000
     except OSError:
         return False
 
 
-def _resolve_includes(template: str):
+def _resolve_includes(template: bytes) -> bytes:
     while (include_match := _find_next_include(template)) is not None:
-        template_path = include_match.group(0)[12:-4]
+        template_path = include_match.group(0)[12:-4].decode("utf-8")
 
         # TODO: Restrict include to specific directory
 
@@ -201,19 +203,19 @@ def _resolve_includes(template: str):
         with open(template_path, "rt", encoding="utf-8") as template_file:
             template = (
                 template[: include_match.start()]
-                + template_file.read()
+                + template_file.read().encode("utf-8")
                 + template[include_match.end() :]
             )
     return template
 
 
-def _check_for_unsupported_nested_blocks(template: str):
+def _check_for_unsupported_nested_blocks(template: bytes):
     if _find_next_block(template) is not None:
         raise ValueError("Nested blocks are not supported")
 
 
-def _resolve_includes_blocks_and_extends(template: str):
-    block_replacements: "dict[str, str]" = {}
+def _resolve_includes_blocks_and_extends(template: bytes) -> bytes:
+    block_replacements: "dict[bytes, bytes]" = {}
 
     # Processing nested child templates
     while (extends_match := _find_next_extends(template)) is not None:
@@ -223,7 +225,7 @@ def _resolve_includes_blocks_and_extends(template: str):
         with open(
             extended_template_name, "rt", encoding="utf-8"
         ) as extended_template_file:
-            extended_template = extended_template_file.read()
+            extended_template = extended_template_file.read().encode("utf-8")
 
         # Removed the extend tag
         template = template[extends_match.end() :]
@@ -240,18 +242,13 @@ def _resolve_includes_blocks_and_extends(template: str):
             if endblock_match is None:
                 raise ValueError(r"Missing {% endblock %} for block: " + block_name)
 
-            # Workaround for bug in re module https://github.com/adafruit/circuitpython/issues/6860
-            block_content = template.encode("utf-8")[
-                block_match.end() : endblock_match.start()
-            ].decode("utf-8")
-            # TODO: Uncomment when bug is fixed
-            # block_content = template[block_match.end() : endblock_match.start()]
+            block_content = template[block_match.end() : endblock_match.start()]
 
             _check_for_unsupported_nested_blocks(block_content)
 
             if block_name in block_replacements:
                 block_replacements[block_name] = block_replacements[block_name].replace(
-                    r"{{ block.super }}", block_content
+                    r"{{ block.super }}".encode("utf-8"), block_content
                 )
             else:
                 block_replacements.setdefault(block_name, block_content)
@@ -268,14 +265,16 @@ def _resolve_includes_blocks_and_extends(template: str):
     return _replace_blocks_with_replacements(template, block_replacements)
 
 
-def _replace_blocks_with_replacements(template: str, replacements: "dict[str, str]"):
+def _replace_blocks_with_replacements(
+    template: bytes, replacements: "dict[bytes, bytes]"
+) -> bytes:
     # Replace blocks in top-level template
     while (block_match := _find_next_block(template)) is not None:
         block_name = block_match.group(0)[9:-3]
 
         # Self-closing block tag without default content
         if (endblock_match := _find_named_endblock(template, block_name)) is None:
-            replacement = replacements.get(block_name, "")
+            replacement = replacements.get(block_name, "".encode("utf-8"))
 
             template = (
                 template[: block_match.start()]
@@ -300,7 +299,7 @@ def _replace_blocks_with_replacements(template: str, replacements: "dict[str, st
             # Replace default content with replacement
             else:
                 replacement = replacements[block_name].replace(
-                    r"{{ block.super }}", block_content
+                    r"{{ block.super }}".encode("utf-8"), block_content
                 )
 
                 template = (
@@ -312,15 +311,15 @@ def _replace_blocks_with_replacements(template: str, replacements: "dict[str, st
     return template
 
 
-def _find_next_hash_comment(template: str):
+def _find_next_hash_comment(template: bytes) -> "re.Match[bytes]":
     return _PRECOMPILED_HASH_COMMENT_PATTERN.search(template)
 
 
-def _find_next_block_comment(template: str):
+def _find_next_block_comment(template: bytes) -> "re.Match[bytes]":
     return _PRECOMPILED_BLOCK_COMMENT_PATTERN.search(template)
 
 
-def _remove_comments(template: str):
+def _remove_comments(template: bytes) -> bytes:
     # Remove hash comments: {# ... #}
     while (comment_match := _find_next_hash_comment(template)) is not None:
         template = template[: comment_match.start()] + template[comment_match.end() :]
@@ -332,7 +331,7 @@ def _remove_comments(template: str):
     return template
 
 
-def _find_next_token(template: str):
+def _find_next_token(template: bytes) -> "re.Match[bytes]":
     return _PRECOMPILED_TOKEN_PATTERN.search(template)
 
 
@@ -344,6 +343,10 @@ def _create_template_function(  # pylint: disable=,too-many-locals,too-many-bran
     context_name: str = "context",
     dry_run: bool = False,
 ) -> "Generator[str] | str":
+    # Workaround for bug in re module https://github.com/adafruit/circuitpython/issues/6860
+    # TODO: Remove .encode() and .decode() when bug is fixed
+    template: bytes = template.encode("utf-8")
+
     # Resolve includes, blocks and extends
     template = _resolve_includes_blocks_and_extends(template)
 
@@ -360,10 +363,10 @@ def _create_template_function(  # pylint: disable=,too-many-locals,too-many-bran
 
     # Resolve tokens
     while (token_match := _find_next_token(template)) is not None:
-        token = token_match.group(0)
+        token: str = token_match.group(0).decode("utf-8")
 
         # Add the text before the token
-        if text_before_token := template[: token_match.start()]:
+        if text_before_token := template[: token_match.start()].decode("utf-8"):
             function_string += (
                 indent * indentation_level + f"yield {repr(text_before_token)}\n"
             )
@@ -452,9 +455,11 @@ def _create_template_function(  # pylint: disable=,too-many-locals,too-many-bran
         # Continue with the rest of the template
         template = template[token_match.end() :]
 
-    # Add the text after the last token (if any) and return
+    # Add the text after the last token (if any)
     if template:
-        function_string += indent * indentation_level + f"yield {repr(template)}\n"
+        function_string += (
+            indent * indentation_level + f"yield {repr(template.decode('utf-8'))}\n"  #
+        )
 
     # If dry run, return the template function string
     if dry_run:
