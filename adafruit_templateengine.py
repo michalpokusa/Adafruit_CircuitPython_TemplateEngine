@@ -156,8 +156,11 @@ _PRECOMPILED_EXTENDS_PATTERN = re.compile(r"{% extends '.+?' %}|{% extends \".+?
 _PRECOMPILED_BLOCK_PATTERN = re.compile(r"{% block \w+? %}")
 _PRECOMPILED_INCLUDE_PATTERN = re.compile(r"{% include '.+?' %}|{% include \".+?\" %}")
 _PRECOMPILED_HASH_COMMENT_PATTERN = re.compile(r"{# .+? #}")
+# Workaround for bug in re module https://github.com/adafruit/circuitpython/issues/8525
 _PRECOMPILED_BLOCK_COMMENT_PATTERN = re.compile(
-    r"{% comment ('.*?' |\".*?\" )?%}[\s\S]*?{% endcomment %}"
+    # TODO: Use r"{% comment ('.*?' |\".*?\" )?%}[\s\S]*?{% endcomment %}" without flags when fixed
+    r"{% comment ('.*?' |\".*?\" )?%}.*?{% endcomment %}",
+    16,  # re.DOTALL flag
 )
 _PRECOMPILED_TOKEN_PATTERN = re.compile(r"{{ .+? }}|{% .+? %}")
 
