@@ -16,7 +16,7 @@ template = r"""
         {% exec name = "jake" %}
         We defined a name: {{ name }}</br>
 
-        {% exec name = name.title() %}
+        {% exec name = (name[0].upper() + name[1:]) if name else "" %}
         First letter was capitalized: {{ name }}</br>
 
         {% exec name = list(name) %}
