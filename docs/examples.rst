@@ -140,13 +140,13 @@ and then include it in multiple pages.
 
 .. literalinclude:: ../examples/footer.html
     :caption: examples/footer.html
-    :lines: 5-
+    :lines: 7-
     :language: html
     :linenos:
 
 .. literalinclude:: ../examples/base_without_footer.html
     :caption: examples/base_without_footer.html
-    :lines: 5-
+    :lines: 7-
     :language: html
     :emphasize-lines: 12
     :linenos:
@@ -173,13 +173,13 @@ This allows sharing whole layout, not only single parts.
 
 .. literalinclude:: ../examples/child.html
     :caption: examples/child.html
-    :lines: 5-
+    :lines: 7-
     :language: html
     :linenos:
 
 .. literalinclude:: ../examples/parent_layout.html
     :caption: examples/parent_layout.html
-    :lines: 5-
+    :lines: 7-
     :language: html
     :linenos:
 
@@ -196,7 +196,7 @@ Executing Python code in templates
 ----------------------------------
 
 It is also possible to execute Python code in templates.
-This an be used for e.g. defining variables, modifying context, or breaking from loops.
+This can be used for e.g. defining variables, modifying context, or breaking from loops.
 
 
 .. literalinclude:: ../examples/templateengine_exec.py
@@ -221,7 +221,7 @@ Supported comment syntaxes:
 
 .. literalinclude:: ../examples/comments.html
     :caption: examples/comments.html
-    :lines: 5-
+    :lines: 7-
     :language: html
     :linenos:
 
@@ -247,7 +247,7 @@ and in all ``Template`` constructors.
 
 .. literalinclude:: ../examples/autoescape.html
     :caption: examples/autoescape.html
-    :lines: 5-
+    :lines: 7-
     :language: html
     :linenos:
 
