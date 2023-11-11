@@ -172,6 +172,7 @@ _PRECOMPILED_BLOCK_COMMENT_PATTERN = re.compile(
     r"{% comment ('.*?' |\".*?\" )?%}[\s\S]*?{% endcomment %}"
 )
 _PRECOMPILED_TOKEN_PATTERN = re.compile(r"{{ .+? }}|{% .+? %}")
+_PRECOMPILED_LSTRIP_BLOCK_PATTERN = re.compile(r"\n( )+$")
 
 
 def _find_next_extends(template: str):
@@ -340,10 +341,16 @@ def _find_next_token(template: str):
     return _PRECOMPILED_TOKEN_PATTERN.search(template)
 
 
+def _token_is_on_own_line(text_before_token: str):
+    return _PRECOMPILED_LSTRIP_BLOCK_PATTERN.search(text_before_token) is not None
+
+
 def _create_template_function(  # pylint: disable=,too-many-locals,too-many-branches,too-many-statements
     template: str,
     language: str = Language.HTML,
     *,
+    trim_blocks: bool = False,
+    lstrip_blocks: bool = False,
     function_name: str = "_",
     context_name: str = "context",
     dry_run: bool = False,
@@ -361,6 +368,7 @@ def _create_template_function(  # pylint: disable=,too-many-locals,too-many-bran
     # Keep track of the template state
     forloop_iterables: "list[str]" = []
     autoescape_modes: "list[bool]" = ["default_on"]
+    last_token_was_block = False
 
     # Resolve tokens
     while (token_match := _find_next_token(template)) is not None:
@@ -368,12 +376,23 @@ def _create_template_function(  # pylint: disable=,too-many-locals,too-many-bran
 
         # Add the text before the token
         if text_before_token := template[: token_match.start()]:
-            function_string += (
-                indent * indentation_level + f"yield {repr(text_before_token)}\n"
-            )
+            if lstrip_blocks and token.startswith(r"{% "):
+                if _token_is_on_own_line(text_before_token):
+                    text_before_token = text_before_token.rstrip(" ")
+
+            if trim_blocks:
+                if last_token_was_block and text_before_token.startswith("\n"):
+                    text_before_token = text_before_token[1:]
+
+            if text_before_token:
+                function_string += (
+                    indent * indentation_level + f"yield {repr(text_before_token)}\n"
+                )
 
         # Token is an expression
         if token.startswith(r"{{ "):
+            last_token_was_block = False
+
             autoescape = autoescape_modes[-1] in ("on", "default_on")
 
             # Expression should be escaped with language-specific function
@@ -390,6 +409,8 @@ def _create_template_function(  # pylint: disable=,too-many-locals,too-many-bran
 
         # Token is a statement
         elif token.startswith(r"{% "):
+            last_token_was_block = True
+
             # Token is a some sort of if statement
             if token.startswith(r"{% if "):
                 function_string += indent * indentation_level + f"{token[3:-3]}:\n"
@@ -457,8 +478,15 @@ def _create_template_function(  # pylint: disable=,too-many-locals,too-many-bran
         template = template[token_match.end() :]
 
     # Add the text after the last token (if any)
-    if template:
-        function_string += indent * indentation_level + f"yield {repr(template)}\n"
+    text_after_last_token = template
+
+    if text_after_last_token:
+        if trim_blocks and text_after_last_token.startswith("\n"):
+            text_after_last_token = text_after_last_token[1:]
+
+        function_string += (
+            indent * indentation_level + f"yield {repr(text_after_last_token)}\n"
+        )
 
     # If dry run, return the template function string
     if dry_run:
