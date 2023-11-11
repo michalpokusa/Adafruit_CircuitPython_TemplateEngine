@@ -26,8 +26,8 @@ template = r"""
         And reverse-sorted: {{ name }}</br>
 
         {% for letter in name %}
-            {% if letter!="a" %}
-                {% if letter=="k" %}
+            {% if letter != "a" %}
+                {% if letter == "k" %}
                     Skip a letter... e.g. "{{ letter }}"</br>
                     {% exec continue %}
                 {% endif %}

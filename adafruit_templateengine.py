@@ -357,7 +357,7 @@ def _create_template_function(  # pylint: disable=,too-many-locals,too-many-bran
     function_string = f"def {function_name}({context_name}):\n"
     indent, indentation_level = "    ", 1
 
-    # Keep track of the tempalte state
+    # Keep track of the template state
     forloop_iterables: "list[str]" = []
     autoescape_modes: "list[bool]" = ["default_on"]
 
