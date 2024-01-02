@@ -27,7 +27,7 @@ It is up to the user to decide which method is more suitable for a given use cas
 **Generally, the first method will be sufficient for most use cases.**
 
 It is also worth noting that compiling all used templates using the second method might not be possible,
-depending one the project and board used, due to the limited amount of RAM.
+depending on the project and board used, due to the limited amount of RAM.
 
 .. literalinclude:: ../examples/templateengine_reusing.py
     :caption: examples/templateengine_reusing.py
@@ -51,7 +51,7 @@ Every expression that would be valid in an f-string is also valid in the templat
 This includes, but is not limited to:
 
 - mathemathical operations e.g. ``{{ 5 + 2 ** 3 }}`` will be replaced with ``"13"``
-- string operations e.g. ``{{ 'hello'.title() }}`` will be replaced with ``"Hello"``
+- string operations e.g. ``{{ 'hello'.upper() }}`` will be replaced with ``"HELLO"``
 - logical operations e.g. ``{{ 1 == 2 }}`` will be replaced with ``"False"``
 - ternary operator e.g. ``{{ 'ON' if True else 'OFF' }}`` will be replaced with ``"ON"``
 - built-in functions e.g. ``{{ len('Adafruit Industries') }}`` will be replaced with ``"19"``
@@ -253,6 +253,7 @@ and in all ``Template`` constructors.
 
 .. literalinclude:: ../examples/autoescape.md
     :caption: examples/autoescape.md
+    :lines: 5-
     :language: markdown
     :linenos:
 
