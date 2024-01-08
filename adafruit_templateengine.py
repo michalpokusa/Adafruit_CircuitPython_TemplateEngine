@@ -71,12 +71,12 @@ def safe_html(value: Any) -> str:
         # 1e&minus;10
     """
 
-    def replace_amp_or_semi(match: re.Match):
+    def _replace_amp_or_semi(match: re.Match):
         return "&amp;" if match.group(0) == "&" else "&semi;"
 
     return (
         # Replace initial & and ; together
-        re.sub(r"&|;", replace_amp_or_semi, str(value))
+        re.sub(r"&|;", _replace_amp_or_semi, str(value))
         # Replace other characters
         .replace('"', "&quot;")
         .replace("_", "&lowbar;")
@@ -175,15 +175,15 @@ _PRECOMPILED_TOKEN_PATTERN = re.compile(r"{{ .+? }}|{% .+? %}")
 _PRECOMPILED_LSTRIP_BLOCK_PATTERN = re.compile(r"\n( )+$")
 
 
-def _find_next_extends(template: str):
+def _find_extends(template: str):
     return _PRECOMPILED_EXTENDS_PATTERN.search(template)
 
 
-def _find_next_block(template: str):
+def _find_block(template: str):
     return _PRECOMPILED_BLOCK_PATTERN.search(template)
 
 
-def _find_next_include(template: str):
+def _find_include(template: str):
     return _PRECOMPILED_INCLUDE_PATTERN.search(template)
 
 
@@ -199,7 +199,7 @@ def _exists_and_is_file(path: str) -> bool:
 
 
 def _resolve_includes(template: str):
-    while (include_match := _find_next_include(template)) is not None:
+    while (include_match := _find_include(template)) is not None:
         template_path = include_match.group(0)[12:-4]
 
         # TODO: Restrict include to specific directory
@@ -218,7 +218,7 @@ def _resolve_includes(template: str):
 
 
 def _check_for_unsupported_nested_blocks(template: str):
-    if _find_next_block(template) is not None:
+    if _find_block(template) is not None:
         raise ValueError("Nested blocks are not supported")
 
 
@@ -226,7 +226,7 @@ def _resolve_includes_blocks_and_extends(template: str):
     block_replacements: "dict[str, str]" = {}
 
     # Processing nested child templates
-    while (extends_match := _find_next_extends(template)) is not None:
+    while (extends_match := _find_extends(template)) is not None:
         extended_template_name = extends_match.group(0)[12:-4]
 
         # Load extended template
@@ -242,7 +242,7 @@ def _resolve_includes_blocks_and_extends(template: str):
         template = _resolve_includes(template)
 
         # Save block replacements
-        while (block_match := _find_next_block(template)) is not None:
+        while (block_match := _find_block(template)) is not None:
             block_name = block_match.group(0)[9:-3]
 
             endblock_match = _find_named_endblock(template, block_name)
@@ -275,7 +275,7 @@ def _resolve_includes_blocks_and_extends(template: str):
 
 def _replace_blocks_with_replacements(template: str, replacements: "dict[str, str]"):
     # Replace blocks in top-level template
-    while (block_match := _find_next_block(template)) is not None:
+    while (block_match := _find_block(template)) is not None:
         block_name = block_match.group(0)[9:-3]
 
         # Self-closing block tag without default content
@@ -317,31 +317,31 @@ def _replace_blocks_with_replacements(template: str, replacements: "dict[str, st
     return template
 
 
-def _find_next_hash_comment(template: str):
+def _find_hash_comment(template: str):
     return _PRECOMPILED_HASH_COMMENT_PATTERN.search(template)
 
 
-def _find_next_block_comment(template: str):
+def _find_block_comment(template: str):
     return _PRECOMPILED_BLOCK_COMMENT_PATTERN.search(template)
 
 
 def _remove_comments(template: str):
     # Remove hash comments: {# ... #}
-    while (comment_match := _find_next_hash_comment(template)) is not None:
+    while (comment_match := _find_hash_comment(template)) is not None:
         template = template[: comment_match.start()] + template[comment_match.end() :]
 
     # Remove block comments: {% comment %} ... {% endcomment %}
-    while (comment_match := _find_next_block_comment(template)) is not None:
+    while (comment_match := _find_block_comment(template)) is not None:
         template = template[: comment_match.start()] + template[comment_match.end() :]
 
     return template
 
 
-def _find_next_token(template: str):
+def _find_token(template: str):
     return _PRECOMPILED_TOKEN_PATTERN.search(template)
 
 
-def _token_is_on_own_line(text_before_token: str):
+def _token_is_on_own_line(text_before_token: str) -> bool:
     return _PRECOMPILED_LSTRIP_BLOCK_PATTERN.search(text_before_token) is not None
 
 
@@ -371,7 +371,7 @@ def _create_template_function(  # pylint: disable=,too-many-locals,too-many-bran
     last_token_was_block = False
 
     # Resolve tokens
-    while (token_match := _find_next_token(template)) is not None:
+    while (token_match := _find_token(template)) is not None:
         token = token_match.group(0)
 
         # Add the text before the token
