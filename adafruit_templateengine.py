@@ -325,14 +325,35 @@ def _find_block_comment(template: str):
     return _PRECOMPILED_BLOCK_COMMENT_PATTERN.search(template)
 
 
-def _remove_comments(template: str):
+def _remove_comments(
+    template: str,
+    *,
+    trim_blocks: bool = True,
+    lstrip_blocks: bool = True,
+):
+    def _remove_matched_comment(template: str, comment_match: re.Match):
+        text_before_comment = template[: comment_match.start()]
+        text_after_comment = template[comment_match.end() :]
+
+        if text_before_comment:
+            if lstrip_blocks:
+                if _token_is_on_own_line(text_before_comment):
+                    text_before_comment = text_before_comment.rstrip(" ")
+
+        if text_after_comment:
+            if trim_blocks:
+                if text_after_comment.startswith("\n"):
+                    text_after_comment = text_after_comment[1:]
+
+        return text_before_comment + text_after_comment
+
     # Remove hash comments: {# ... #}
     while (comment_match := _find_hash_comment(template)) is not None:
-        template = template[: comment_match.start()] + template[comment_match.end() :]
+        template = _remove_matched_comment(template, comment_match)
 
     # Remove block comments: {% comment %} ... {% endcomment %}
     while (comment_match := _find_block_comment(template)) is not None:
-        template = template[: comment_match.start()] + template[comment_match.end() :]
+        template = _remove_matched_comment(template, comment_match)
 
     return template
 
