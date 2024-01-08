@@ -164,27 +164,27 @@ def safe_markdown(value: Any) -> str:
     )
 
 
-_PRECOMPILED_EXTENDS_PATTERN = re.compile(r"{% extends '.+?' %}|{% extends \".+?\" %}")
-_PRECOMPILED_BLOCK_PATTERN = re.compile(r"{% block \w+? %}")
-_PRECOMPILED_INCLUDE_PATTERN = re.compile(r"{% include '.+?' %}|{% include \".+?\" %}")
-_PRECOMPILED_HASH_COMMENT_PATTERN = re.compile(r"{# .+? #}")
-_PRECOMPILED_BLOCK_COMMENT_PATTERN = re.compile(
+_EXTENDS_PATTERN = re.compile(r"{% extends '.+?' %}|{% extends \".+?\" %}")
+_BLOCK_PATTERN = re.compile(r"{% block \w+? %}")
+_INCLUDE_PATTERN = re.compile(r"{% include '.+?' %}|{% include \".+?\" %}")
+_HASH_COMMENT_PATTERN = re.compile(r"{# .+? #}")
+_BLOCK_COMMENT_PATTERN = re.compile(
     r"{% comment ('.*?' |\".*?\" )?%}[\s\S]*?{% endcomment %}"
 )
-_PRECOMPILED_TOKEN_PATTERN = re.compile(r"{{ .+? }}|{% .+? %}")
-_PRECOMPILED_LSTRIP_BLOCK_PATTERN = re.compile(r"\n( )+$")
+_TOKEN_PATTERN = re.compile(r"{{ .+? }}|{% .+? %}")
+_LSTRIP_BLOCK_PATTERN = re.compile(r"\n( )+$")
 
 
 def _find_extends(template: str):
-    return _PRECOMPILED_EXTENDS_PATTERN.search(template)
+    return _EXTENDS_PATTERN.search(template)
 
 
 def _find_block(template: str):
-    return _PRECOMPILED_BLOCK_PATTERN.search(template)
+    return _BLOCK_PATTERN.search(template)
 
 
 def _find_include(template: str):
-    return _PRECOMPILED_INCLUDE_PATTERN.search(template)
+    return _INCLUDE_PATTERN.search(template)
 
 
 def _find_named_endblock(template: str, name: str):
@@ -318,11 +318,11 @@ def _replace_blocks_with_replacements(template: str, replacements: "dict[str, st
 
 
 def _find_hash_comment(template: str):
-    return _PRECOMPILED_HASH_COMMENT_PATTERN.search(template)
+    return _HASH_COMMENT_PATTERN.search(template)
 
 
 def _find_block_comment(template: str):
-    return _PRECOMPILED_BLOCK_COMMENT_PATTERN.search(template)
+    return _BLOCK_COMMENT_PATTERN.search(template)
 
 
 def _remove_comments(
@@ -359,11 +359,11 @@ def _remove_comments(
 
 
 def _find_token(template: str):
-    return _PRECOMPILED_TOKEN_PATTERN.search(template)
+    return _TOKEN_PATTERN.search(template)
 
 
 def _token_is_on_own_line(text_before_token: str) -> bool:
-    return _PRECOMPILED_LSTRIP_BLOCK_PATTERN.search(text_before_token) is not None
+    return _LSTRIP_BLOCK_PATTERN.search(text_before_token) is not None
 
 
 def _create_template_function(  # pylint: disable=,too-many-locals,too-many-branches,too-many-statements
