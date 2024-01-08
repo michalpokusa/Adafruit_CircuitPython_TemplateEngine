@@ -32,7 +32,7 @@ import re
 try:
     from sys import implementation
 
-    if implementation.version < (9, 0, 0):
+    if implementation.name == "circuitpython" and implementation.version < (9, 0, 0):
         print(
             "Warning: adafruit_templateengine requires CircuitPython 9.0.0, as previous versions"
             " will have limited functionality when using block comments and non-ASCII characters."
