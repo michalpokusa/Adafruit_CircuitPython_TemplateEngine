@@ -219,7 +219,7 @@ def _resolve_includes(template: str):
 
 def _check_for_unsupported_nested_blocks(template: str):
     if _find_block(template) is not None:
-        raise ValueError("Nested blocks are not supported")
+        raise SyntaxError("Nested blocks are not supported")
 
 
 def _resolve_includes_blocks_and_extends(template: str):
@@ -248,7 +248,7 @@ def _resolve_includes_blocks_and_extends(template: str):
             endblock_match = _find_named_endblock(template, block_name)
 
             if endblock_match is None:
-                raise ValueError(r"Missing {% endblock %} for block: " + block_name)
+                raise SyntaxError("Missing {% endblock %} for block: " + block_name)
 
             block_content = template[block_match.end() : endblock_match.start()]
 
@@ -457,7 +457,7 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
                 indentation_level -= 1
 
                 if not nested_if_statements:
-                    raise SyntaxError("No matching {% if ... %} block for {% endif %}")
+                    raise SyntaxError("Missing {% if ... %} block for {% endif %}")
 
                 nested_if_statements.pop()
 
@@ -479,9 +479,7 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
                 indentation_level -= 1
 
                 if not nested_for_loops:
-                    raise SyntaxError(
-                        "No matching {% for ... %} block for {% endfor %}"
-                    )
+                    raise SyntaxError("Missing {% for ... %} block for {% endfor %}")
 
                 nested_for_loops.pop()
 
@@ -496,7 +494,7 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
 
                 if not nested_while_loops:
                     raise SyntaxError(
-                        "No matching {% while ... %} block for {% endwhile %}"
+                        "Missing {% while ... %} block for {% endwhile %}"
                     )
 
                 nested_while_loops.pop()
@@ -517,7 +515,7 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
             elif token == r"{% endautoescape %}":
                 if not nested_autoescape_modes:
                     raise SyntaxError(
-                        "No matching {% autoescape ... %} block for {% endautoescape %}"
+                        "Missing {% autoescape ... %} block for {% endautoescape %}"
                     )
 
                 nested_autoescape_modes.pop()
@@ -534,15 +532,15 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
     # Checking for unclosed blocks
     if len(nested_if_statements) > 0:
         last_if_statement = nested_if_statements[-1]
-        raise SyntaxError(f"Missing {{% endif %}} for {last_if_statement}")
+        raise SyntaxError("Missing {% endif %} for " + last_if_statement)
 
     if len(nested_for_loops) > 0:
         last_for_loop = nested_for_loops[-1]
-        raise SyntaxError(f"Missing {{% endfor %}} for {last_for_loop}")
+        raise SyntaxError("Missing {% endfor %} for " + last_for_loop)
 
     if len(nested_while_loops) > 0:
         last_while_loop = nested_while_loops[-1]
-        raise SyntaxError(f"Missing {{% endwhile %}} for {last_while_loop}")
+        raise SyntaxError("Missing {% endwhile %} for " + last_while_loop)
 
     # No check for unclosed autoescape blocks, as they are optional and do not result in errors
 
