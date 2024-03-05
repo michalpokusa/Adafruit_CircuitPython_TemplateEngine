@@ -521,12 +521,10 @@ def _create_template_function(  # pylint: disable=,too-many-locals,too-many-bran
                 nested_autoescape_modes.pop()
 
             else:
-                raise ValueError(
-                    f"Unknown token type: {token} at {token_match.start()}"
-                )
+                raise SyntaxError(f"Unknown token type: {token}")
 
         else:
-            raise ValueError(f"Unknown token type: {token} at {token_match.start()}")
+            raise SyntaxError(f"Unknown token type: {token}")
 
         # Continue with the rest of the template
         template = template[token_match.end() :]
