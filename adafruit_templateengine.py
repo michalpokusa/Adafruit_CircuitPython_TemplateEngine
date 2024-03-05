@@ -407,10 +407,12 @@ def _create_template_function(  # pylint: disable=,too-many-locals,too-many-bran
                 if last_token_was_block and text_before_token.startswith("\n"):
                     text_before_token = text_before_token[1:]
 
-            if text_before_token:
-                function_string += (
-                    indent * indentation_level + f"yield {repr(text_before_token)}\n"
-                )
+        if text_before_token:
+            function_string += (
+                indent * indentation_level + f"yield {repr(text_before_token)}\n"
+            )
+        else:
+            function_string += indent * indentation_level + "pass\n"
 
         # Token is an expression
         if token.startswith(r"{{ "):
