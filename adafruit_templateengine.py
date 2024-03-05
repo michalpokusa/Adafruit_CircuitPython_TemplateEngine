@@ -366,13 +366,13 @@ def _token_is_on_own_line(text_before_token: str) -> bool:
     return _LSTRIP_BLOCK_PATTERN.search(text_before_token) is not None
 
 
-def _create_template_function(  # pylint: disable=,too-many-locals,too-many-branches,too-many-statements
+def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too-many-branches,too-many-statements
     template: str,
     language: str = Language.HTML,
     *,
     trim_blocks: bool = True,
     lstrip_blocks: bool = True,
-    function_name: str = "_",
+    function_name: str = "__template_rendering_function",
     context_name: str = "context",
     dry_run: bool = False,
 ) -> "Generator[str] | str":
@@ -605,7 +605,9 @@ class Template:
         :param str template_string: String containing the template to be rendered
         :param str language: Language for autoescaping. Defaults to HTML
         """
-        self._template_function = _create_template_function(template_string, language)
+        self._template_function = _create_template_rendering_function(
+            template_string, language
+        )
 
     def render_iter(
         self, context: dict = None, *, chunk_size: int = None
