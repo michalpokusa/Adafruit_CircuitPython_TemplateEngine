@@ -219,7 +219,7 @@ def _resolve_includes(template: str):
 
 def _check_for_unsupported_nested_blocks(template: str):
     if _find_block(template) is not None:
-        raise ValueError("Nested blocks are not supported")
+        raise SyntaxError("Nested blocks are not supported")
 
 
 def _resolve_includes_blocks_and_extends(template: str):
@@ -248,7 +248,7 @@ def _resolve_includes_blocks_and_extends(template: str):
             endblock_match = _find_named_endblock(template, block_name)
 
             if endblock_match is None:
-                raise ValueError(r"Missing {% endblock %} for block: " + block_name)
+                raise SyntaxError("Missing {% endblock %} for block: " + block_name)
 
             block_content = template[block_match.end() : endblock_match.start()]
 
@@ -366,13 +366,13 @@ def _token_is_on_own_line(text_before_token: str) -> bool:
     return _LSTRIP_BLOCK_PATTERN.search(text_before_token) is not None
 
 
-def _create_template_function(  # pylint: disable=,too-many-locals,too-many-branches,too-many-statements
+def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too-many-branches,too-many-statements
     template: str,
     language: str = Language.HTML,
     *,
     trim_blocks: bool = True,
     lstrip_blocks: bool = True,
-    function_name: str = "_",
+    function_name: str = "__template_rendering_function",
     context_name: str = "context",
     dry_run: bool = False,
 ) -> "Generator[str] | str":
@@ -387,8 +387,10 @@ def _create_template_function(  # pylint: disable=,too-many-locals,too-many-bran
     indent, indentation_level = "    ", 1
 
     # Keep track of the template state
-    forloop_iterables: "list[str]" = []
-    autoescape_modes: "list[bool]" = ["default_on"]
+    nested_if_statements: "list[str]" = []
+    nested_for_loops: "list[str]" = []
+    nested_while_loops: "list[str]" = []
+    nested_autoescape_modes: "list[str]" = []
     last_token_was_block = False
 
     # Resolve tokens
@@ -405,16 +407,21 @@ def _create_template_function(  # pylint: disable=,too-many-locals,too-many-bran
                 if last_token_was_block and text_before_token.startswith("\n"):
                     text_before_token = text_before_token[1:]
 
-            if text_before_token:
-                function_string += (
-                    indent * indentation_level + f"yield {repr(text_before_token)}\n"
-                )
+        if text_before_token:
+            function_string += (
+                indent * indentation_level + f"yield {repr(text_before_token)}\n"
+            )
+        else:
+            function_string += indent * indentation_level + "pass\n"
 
         # Token is an expression
         if token.startswith(r"{{ "):
             last_token_was_block = False
 
-            autoescape = autoescape_modes[-1] in ("on", "default_on")
+            if nested_autoescape_modes:
+                autoescape = nested_autoescape_modes[-1][14:-3] == "on"
+            else:
+                autoescape = True
 
             # Expression should be escaped with language-specific function
             if autoescape:
@@ -436,6 +443,8 @@ def _create_template_function(  # pylint: disable=,too-many-locals,too-many-bran
             if token.startswith(r"{% if "):
                 function_string += indent * indentation_level + f"{token[3:-3]}:\n"
                 indentation_level += 1
+
+                nested_if_statements.append(token)
             elif token.startswith(r"{% elif "):
                 indentation_level -= 1
                 function_string += indent * indentation_level + f"{token[3:-3]}:\n"
@@ -447,29 +456,48 @@ def _create_template_function(  # pylint: disable=,too-many-locals,too-many-bran
             elif token == r"{% endif %}":
                 indentation_level -= 1
 
+                if not nested_if_statements:
+                    raise SyntaxError("Missing {% if ... %} block for {% endif %}")
+
+                nested_if_statements.pop()
+
             # Token is a for loop
             elif token.startswith(r"{% for "):
                 function_string += indent * indentation_level + f"{token[3:-3]}:\n"
                 indentation_level += 1
 
-                forloop_iterables.append(token[3:-3].split(" in ", 1)[1])
+                nested_for_loops.append(token)
             elif token == r"{% empty %}":
                 indentation_level -= 1
+                last_forloop_iterable = nested_for_loops[-1][3:-3].split(" in ", 1)[1]
 
                 function_string += (
-                    indent * indentation_level + f"if not {forloop_iterables[-1]}:\n"
+                    indent * indentation_level + f"if not {last_forloop_iterable}:\n"
                 )
                 indentation_level += 1
             elif token == r"{% endfor %}":
                 indentation_level -= 1
-                forloop_iterables.pop()
+
+                if not nested_for_loops:
+                    raise SyntaxError("Missing {% for ... %} block for {% endfor %}")
+
+                nested_for_loops.pop()
 
             # Token is a while loop
             elif token.startswith(r"{% while "):
                 function_string += indent * indentation_level + f"{token[3:-3]}:\n"
                 indentation_level += 1
+
+                nested_while_loops.append(token)
             elif token == r"{% endwhile %}":
                 indentation_level -= 1
+
+                if not nested_while_loops:
+                    raise SyntaxError(
+                        "Missing {% while ... %} block for {% endwhile %}"
+                    )
+
+                nested_while_loops.pop()
 
             # Token is a Python code
             elif token.startswith(r"{% exec "):
@@ -481,22 +509,40 @@ def _create_template_function(  # pylint: disable=,too-many-locals,too-many-bran
                 mode = token[14:-3]
                 if mode not in ("on", "off"):
                     raise ValueError(f"Unknown autoescape mode: {mode}")
-                autoescape_modes.append(mode)
+
+                nested_autoescape_modes.append(token)
+
             elif token == r"{% endautoescape %}":
-                if autoescape_modes == ["default_on"]:
-                    raise ValueError("No autoescape mode to end")
-                autoescape_modes.pop()
+                if not nested_autoescape_modes:
+                    raise SyntaxError(
+                        "Missing {% autoescape ... %} block for {% endautoescape %}"
+                    )
+
+                nested_autoescape_modes.pop()
 
             else:
-                raise ValueError(
-                    f"Unknown token type: {token} at {token_match.start()}"
-                )
+                raise SyntaxError(f"Unknown token type: {token}")
 
         else:
-            raise ValueError(f"Unknown token type: {token} at {token_match.start()}")
+            raise SyntaxError(f"Unknown token type: {token}")
 
         # Continue with the rest of the template
         template = template[token_match.end() :]
+
+    # Checking for unclosed blocks
+    if len(nested_if_statements) > 0:
+        last_if_statement = nested_if_statements[-1]
+        raise SyntaxError("Missing {% endif %} for " + last_if_statement)
+
+    if len(nested_for_loops) > 0:
+        last_for_loop = nested_for_loops[-1]
+        raise SyntaxError("Missing {% endfor %} for " + last_for_loop)
+
+    if len(nested_while_loops) > 0:
+        last_while_loop = nested_while_loops[-1]
+        raise SyntaxError("Missing {% endwhile %} for " + last_while_loop)
+
+    # No check for unclosed autoescape blocks, as they are optional and do not result in errors
 
     # Add the text after the last token (if any)
     text_after_last_token = template
@@ -557,7 +603,9 @@ class Template:
         :param str template_string: String containing the template to be rendered
         :param str language: Language for autoescaping. Defaults to HTML
         """
-        self._template_function = _create_template_function(template_string, language)
+        self._template_function = _create_template_rendering_function(
+            template_string, language
+        )
 
     def render_iter(
         self, context: dict = None, *, chunk_size: int = None
