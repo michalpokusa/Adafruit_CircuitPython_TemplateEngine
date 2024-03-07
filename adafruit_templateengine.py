@@ -57,6 +57,17 @@ class Language:  # pylint: disable=too-few-public-methods
     """Markdown language"""
 
 
+class Token:  # pylint: disable=too-few-public-methods
+    """Stores a token with its position in a template."""
+
+    def __init__(self, template: str, start_position: int, end_position: int):
+        self.template = template
+        self.start_position = start_position
+        self.end_position = end_position
+
+        self.content = template[start_position:end_position]
+
+
 def safe_html(value: Any) -> str:
     """
     Encodes unsafe symbols in ``value`` to HTML entities and returns the string that can be safely
@@ -191,6 +202,64 @@ def _find_named_endblock(template: str, name: str):
     return re.search(r"{% endblock " + name + r" %}", template)
 
 
+def _underline_token_in_template(
+    token: Token, *, lines_around: int = 5, symbol: str = "^"
+) -> str:
+    """
+    Return ``number_of_lines`` lines before and after the token, with the token content underlined
+    with ``symbol`` e.g.:
+
+    ```html
+    [8 lines skipped]
+            Shopping list:
+            <ul>
+                {% for item in context["items"] %}
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                    <li>{{ item["name"] }} - ${{ item["price"] }}</li>
+                {% empty %}
+    [5 lines skipped]
+    ```
+    """
+
+    template_before_token = token.template[: token.start_position]
+    if (skipped_lines := template_before_token.count("\n") - lines_around) > 0:
+        template_before_token = f"[{skipped_lines} lines skipped]\n" + "\n".join(
+            template_before_token.split("\n")[-(lines_around + 1) :]
+        )
+
+    template_after_token = token.template[token.end_position :]
+    if (skipped_lines := template_after_token.count("\n") - lines_around) > 0:
+        template_after_token = (
+            "\n".join(template_after_token.split("\n")[: (lines_around + 1)])
+            + f"\n[{skipped_lines} lines skipped]"
+        )
+
+    lines_before_line_with_token = template_before_token.rsplit("\n", 1)[0]
+
+    line_with_token = (
+        template_before_token.rsplit("\n", 1)[-1]
+        + token.content
+        + template_after_token.split("\n")[0]
+    )
+
+    line_with_underline = (
+        " " * len(template_before_token.rsplit("\n", 1)[-1])
+        + symbol * len(token.content)
+        + " " * len(template_after_token.split("\n")[0])
+    )
+
+    lines_after_line_with_token = template_after_token.split("\n", 1)[-1]
+
+    return "\n".join(
+        [
+            lines_before_line_with_token,
+            line_with_token,
+            line_with_underline,
+            lines_after_line_with_token,
+        ]
+    )
+
+
 def _exists_and_is_file(path: str) -> bool:
     try:
         return (os.stat(path)[0] & 0b_11110000_00000000) == 0b_10000000_00000000
@@ -205,7 +274,12 @@ def _resolve_includes(template: str):
         # TODO: Restrict include to specific directory
 
         if not _exists_and_is_file(template_path):
-            raise OSError(f"Include template not found: {template_path}")
+            raise OSError(
+                f"Include template not found: {template_path}\n\n"
+                + _underline_token_in_template(
+                    Token(template, include_match.start(), include_match.end())
+                )
+            )
 
         # Replace the include with the template content
         with open(template_path, "rt", encoding="utf-8") as template_file:
@@ -215,11 +289,6 @@ def _resolve_includes(template: str):
                 + template[include_match.end() :]
             )
     return template
-
-
-def _check_for_unsupported_nested_blocks(template: str):
-    if _find_block(template) is not None:
-        raise SyntaxError("Nested blocks are not supported")
 
 
 def _resolve_includes_blocks_and_extends(template: str):
@@ -235,24 +304,45 @@ def _resolve_includes_blocks_and_extends(template: str):
         ) as extended_template_file:
             extended_template = extended_template_file.read()
 
-        # Removed the extend tag
-        template = template[extends_match.end() :]
+        offset = extends_match.end()
 
         # Resolve includes
         template = _resolve_includes(template)
 
         # Save block replacements
-        while (block_match := _find_block(template)) is not None:
+        while (block_match := _find_block(template[offset:])) is not None:
             block_name = block_match.group(0)[9:-3]
 
-            endblock_match = _find_named_endblock(template, block_name)
+            endblock_match = _find_named_endblock(template[offset:], block_name)
 
             if endblock_match is None:
-                raise SyntaxError("Missing {% endblock %} for block: " + block_name)
+                raise SyntaxError(
+                    "Missing {% endblock %}:\n\n"
+                    + _underline_token_in_template(
+                        Token(
+                            template,
+                            offset + block_match.start(),
+                            offset + block_match.end(),
+                        )
+                    )
+                )
 
-            block_content = template[block_match.end() : endblock_match.start()]
+            block_content = template[
+                offset + block_match.end() : offset + endblock_match.start()
+            ]
 
-            _check_for_unsupported_nested_blocks(block_content)
+            # Check for unsupported nested blocks
+            if (nested_block_match := _find_block(block_content)) is not None:
+                raise SyntaxError(
+                    "Nested blocks are not supported:\n\n"
+                    + _underline_token_in_template(
+                        Token(
+                            template,
+                            offset + block_match.end() + nested_block_match.start(),
+                            offset + block_match.end() + nested_block_match.end(),
+                        )
+                    )
+                )
 
             if block_name in block_replacements:
                 block_replacements[block_name] = block_replacements[block_name].replace(
@@ -261,9 +351,7 @@ def _resolve_includes_blocks_and_extends(template: str):
             else:
                 block_replacements.setdefault(block_name, block_content)
 
-            template = (
-                template[: block_match.start()] + template[endblock_match.end() :]
-            )
+            offset += endblock_match.end()
 
         template = extended_template
 
@@ -292,7 +380,18 @@ def _replace_blocks_with_replacements(template: str, replacements: "dict[str, st
         else:
             block_content = template[block_match.end() : endblock_match.start()]
 
-            _check_for_unsupported_nested_blocks(block_content)
+            # Check for unsupported nested blocks
+            if (nested_block_match := _find_block(block_content)) is not None:
+                raise SyntaxError(
+                    "Nested blocks are not supported:\n\n"
+                    + _underline_token_in_template(
+                        Token(
+                            template,
+                            block_match.end() + nested_block_match.start(),
+                            block_match.end() + nested_block_match.end(),
+                        )
+                    )
+                )
 
             # No replacement for this block, use default content
             if block_name not in replacements:
@@ -387,19 +486,24 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
     indent, indentation_level = "    ", 1
 
     # Keep track of the template state
-    nested_if_statements: "list[str]" = []
-    nested_for_loops: "list[str]" = []
-    nested_while_loops: "list[str]" = []
-    nested_autoescape_modes: "list[str]" = []
+    nested_if_statements: "list[Token]" = []
+    nested_for_loops: "list[Token]" = []
+    nested_while_loops: "list[Token]" = []
+    nested_autoescape_modes: "list[Token]" = []
     last_token_was_block = False
+    offset = 0
 
     # Resolve tokens
-    while (token_match := _find_token(template)) is not None:
-        token = token_match.group(0)
+    while (token_match := _find_token(template[offset:])) is not None:
+        token = Token(
+            template,
+            offset + token_match.start(),
+            offset + token_match.end(),
+        )
 
         # Add the text before the token
-        if text_before_token := template[: token_match.start()]:
-            if lstrip_blocks and token.startswith(r"{% "):
+        if text_before_token := template[offset : offset + token_match.start()]:
+            if lstrip_blocks and token.content.startswith(r"{% "):
                 if _token_is_on_own_line(text_before_token):
                     text_before_token = text_before_token.rstrip(" ")
 
@@ -415,7 +519,7 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
             function_string += indent * indentation_level + "pass\n"
 
         # Token is an expression
-        if token.startswith(r"{{ "):
+        if token.content.startswith(r"{{ "):
             last_token_was_block = False
 
             if nested_autoescape_modes:
@@ -427,125 +531,154 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
             if autoescape:
                 function_string += (
                     indent * indentation_level
-                    + f"yield safe_{language.lower()}({token[3:-3]})\n"
+                    + f"yield safe_{language.lower()}({token.content[3:-3]})\n"
                 )
             # Expression should not be escaped
             else:
                 function_string += (
-                    indent * indentation_level + f"yield str({token[3:-3]})\n"
+                    indent * indentation_level + f"yield str({token.content[3:-3]})\n"
                 )
 
         # Token is a statement
-        elif token.startswith(r"{% "):
+        elif token.content.startswith(r"{% "):
             last_token_was_block = True
 
             # Token is a some sort of if statement
-            if token.startswith(r"{% if "):
-                function_string += indent * indentation_level + f"{token[3:-3]}:\n"
+            if token.content.startswith(r"{% if "):
+                function_string += (
+                    indent * indentation_level + f"{token.content[3:-3]}:\n"
+                )
                 indentation_level += 1
 
                 nested_if_statements.append(token)
-            elif token.startswith(r"{% elif "):
+            elif token.content.startswith(r"{% elif "):
                 indentation_level -= 1
-                function_string += indent * indentation_level + f"{token[3:-3]}:\n"
+                function_string += (
+                    indent * indentation_level + f"{token.content[3:-3]}:\n"
+                )
                 indentation_level += 1
-            elif token == r"{% else %}":
+            elif token.content == r"{% else %}":
                 indentation_level -= 1
                 function_string += indent * indentation_level + "else:\n"
                 indentation_level += 1
-            elif token == r"{% endif %}":
+            elif token.content == r"{% endif %}":
                 indentation_level -= 1
 
                 if not nested_if_statements:
-                    raise SyntaxError("Missing {% if ... %} block for {% endif %}")
+                    raise SyntaxError(
+                        "Missing {% if ... %}\n\n" + _underline_token_in_template(token)
+                    )
 
                 nested_if_statements.pop()
 
             # Token is a for loop
-            elif token.startswith(r"{% for "):
-                function_string += indent * indentation_level + f"{token[3:-3]}:\n"
+            elif token.content.startswith(r"{% for "):
+                function_string += (
+                    indent * indentation_level + f"{token.content[3:-3]}:\n"
+                )
                 indentation_level += 1
 
                 nested_for_loops.append(token)
-            elif token == r"{% empty %}":
+            elif token.content == r"{% empty %}":
                 indentation_level -= 1
-                last_forloop_iterable = nested_for_loops[-1][3:-3].split(" in ", 1)[1]
+                last_forloop_iterable = (
+                    nested_for_loops[-1].content[3:-3].split(" in ", 1)[1]
+                )
 
                 function_string += (
                     indent * indentation_level + f"if not {last_forloop_iterable}:\n"
                 )
                 indentation_level += 1
-            elif token == r"{% endfor %}":
+            elif token.content == r"{% endfor %}":
                 indentation_level -= 1
 
                 if not nested_for_loops:
-                    raise SyntaxError("Missing {% for ... %} block for {% endfor %}")
+                    raise SyntaxError(
+                        "Missing {% for ... %}\n\n"
+                        + _underline_token_in_template(token)
+                    )
 
                 nested_for_loops.pop()
 
             # Token is a while loop
-            elif token.startswith(r"{% while "):
-                function_string += indent * indentation_level + f"{token[3:-3]}:\n"
+            elif token.content.startswith(r"{% while "):
+                function_string += (
+                    indent * indentation_level + f"{token.content[3:-3]}:\n"
+                )
                 indentation_level += 1
 
                 nested_while_loops.append(token)
-            elif token == r"{% endwhile %}":
+            elif token.content == r"{% endwhile %}":
                 indentation_level -= 1
 
                 if not nested_while_loops:
                     raise SyntaxError(
-                        "Missing {% while ... %} block for {% endwhile %}"
+                        "Missing {% while ... %}\n\n"
+                        + _underline_token_in_template(token)
                     )
 
                 nested_while_loops.pop()
 
             # Token is a Python code
-            elif token.startswith(r"{% exec "):
-                expression = token[8:-3]
+            elif token.content.startswith(r"{% exec "):
+                expression = token.content[8:-3]
                 function_string += indent * indentation_level + f"{expression}\n"
 
             # Token is autoescape mode change
-            elif token.startswith(r"{% autoescape "):
-                mode = token[14:-3]
+            elif token.content.startswith(r"{% autoescape "):
+                mode = token.content[14:-3]
                 if mode not in ("on", "off"):
                     raise ValueError(f"Unknown autoescape mode: {mode}")
 
                 nested_autoescape_modes.append(token)
 
-            elif token == r"{% endautoescape %}":
+            elif token.content == r"{% endautoescape %}":
                 if not nested_autoescape_modes:
                     raise SyntaxError(
-                        "Missing {% autoescape ... %} block for {% endautoescape %}"
+                        "Missing {% autoescape ... %}\n\n"
+                        + _underline_token_in_template(token)
                     )
 
                 nested_autoescape_modes.pop()
 
             else:
-                raise SyntaxError(f"Unknown token type: {token}")
+                raise SyntaxError(
+                    f"Unknown token type: {token.content}\n\n"
+                    + _underline_token_in_template(token)
+                )
 
         else:
-            raise SyntaxError(f"Unknown token type: {token}")
+            raise SyntaxError(
+                f"Unknown token type: {token.content}\n\n"
+                + _underline_token_in_template(token)
+            )
 
-        # Continue with the rest of the template
-        template = template[token_match.end() :]
+        # Move offset to the end of the token
+        offset += token_match.end()
 
     # Checking for unclosed blocks
     if len(nested_if_statements) > 0:
         last_if_statement = nested_if_statements[-1]
-        raise SyntaxError("Missing {% endif %} for " + last_if_statement)
+        raise SyntaxError(
+            "Missing {% endif %}\n\n" + _underline_token_in_template(last_if_statement)
+        )
 
     if len(nested_for_loops) > 0:
         last_for_loop = nested_for_loops[-1]
-        raise SyntaxError("Missing {% endfor %} for " + last_for_loop)
+        raise SyntaxError(
+            "Missing {% endfor %}\n\n" + _underline_token_in_template(last_for_loop)
+        )
 
     if len(nested_while_loops) > 0:
         last_while_loop = nested_while_loops[-1]
-        raise SyntaxError("Missing {% endwhile %} for " + last_while_loop)
+        raise SyntaxError(
+            "Missing {% endwhile %}\n\n" + _underline_token_in_template(last_while_loop)
+        )
 
     # No check for unclosed autoescape blocks, as they are optional and do not result in errors
 
     # Add the text after the last token (if any)
-    text_after_last_token = template
+    text_after_last_token = template[offset:]
 
     if text_after_last_token:
         if trim_blocks and text_after_last_token.startswith("\n"):
