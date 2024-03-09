@@ -324,7 +324,7 @@ def _resolve_includes_blocks_and_extends(template: str):
 
             if endblock_match is None:
                 raise TemplateSyntaxError(
-                    "Missing {% endblock %}",
+                    "No matching {% endblock %}",
                     Token(
                         template,
                         offset + block_match.start(),
@@ -554,7 +554,7 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
                 nested_if_statements.append(token)
             elif token.content.startswith(r"{% elif "):
                 if not nested_if_statements:
-                    raise TemplateSyntaxError("Missing {% if ... %}", token)
+                    raise TemplateSyntaxError("No matching {% if ... %}", token)
 
                 indentation_level -= 1
                 function_string += (
@@ -563,14 +563,14 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
                 indentation_level += 1
             elif token.content == r"{% else %}":
                 if not nested_if_statements:
-                    raise TemplateSyntaxError("Missing {% if ... %}", token)
+                    raise TemplateSyntaxError("No matching {% if ... %}", token)
 
                 indentation_level -= 1
                 function_string += indent * indentation_level + "else:\n"
                 indentation_level += 1
             elif token.content == r"{% endif %}":
                 if not nested_if_statements:
-                    raise TemplateSyntaxError("Missing {% if ... %}", token)
+                    raise TemplateSyntaxError("No matching {% if ... %}", token)
 
                 indentation_level -= 1
                 nested_if_statements.pop()
@@ -585,7 +585,7 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
                 nested_for_loops.append(token)
             elif token.content == r"{% empty %}":
                 if not nested_for_loops:
-                    raise TemplateSyntaxError("Missing {% for ... %}", token)
+                    raise TemplateSyntaxError("No matching {% for ... %}", token)
 
                 indentation_level -= 1
                 last_forloop_iterable = (
@@ -597,7 +597,7 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
                 indentation_level += 1
             elif token.content == r"{% endfor %}":
                 if not nested_for_loops:
-                    raise TemplateSyntaxError("Missing {% for ... %}", token)
+                    raise TemplateSyntaxError("No matching {% for ... %}", token)
 
                 indentation_level -= 1
                 nested_for_loops.pop()
@@ -612,7 +612,7 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
                 nested_while_loops.append(token)
             elif token.content == r"{% endwhile %}":
                 if not nested_while_loops:
-                    raise TemplateSyntaxError("Missing {% while ... %}", token)
+                    raise TemplateSyntaxError("No matching {% while ... %}", token)
 
                 indentation_level -= 1
                 nested_while_loops.pop()
@@ -622,7 +622,7 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
                 expression = token.content[8:-3]
                 function_string += indent * indentation_level + f"{expression}\n"
 
-            # Token is autoescape mode change
+            # Token is a autoescape mode change
             elif token.content.startswith(r"{% autoescape "):
                 mode = token.content[14:-3]
                 if mode not in ("on", "off"):
@@ -632,15 +632,15 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
 
             elif token.content == r"{% endautoescape %}":
                 if not nested_autoescape_modes:
-                    raise TemplateSyntaxError("Missing {% autoescape ... %}", token)
+                    raise TemplateSyntaxError("No matching {% autoescape ... %}", token)
 
                 nested_autoescape_modes.pop()
 
             else:
-                raise TemplateSyntaxError(f"Unknown token type: {token.content}", token)
+                raise TemplateSyntaxError(f"Unknown token: {token.content}", token)
 
         else:
-            raise TemplateSyntaxError(f"Unknown token type: {token.content}", token)
+            raise TemplateSyntaxError(f"Unknown token: {token.content}", token)
 
         # Move offset to the end of the token
         offset += token_match.end()
@@ -648,15 +648,15 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
     # Checking for unclosed blocks
     if len(nested_if_statements) > 0:
         last_if_statement = nested_if_statements[-1]
-        raise TemplateSyntaxError("Missing {% endif %}", last_if_statement)
+        raise TemplateSyntaxError("No matching {% endif %}", last_if_statement)
 
     if len(nested_for_loops) > 0:
         last_for_loop = nested_for_loops[-1]
-        raise TemplateSyntaxError("Missing {% endfor %}", last_for_loop)
+        raise TemplateSyntaxError("No matching {% endfor %}", last_for_loop)
 
     if len(nested_while_loops) > 0:
         last_while_loop = nested_while_loops[-1]
-        raise TemplateSyntaxError("Missing {% endwhile %}", last_while_loop)
+        raise TemplateSyntaxError("No matching {% endwhile %}", last_while_loop)
 
     # No check for unclosed autoescape blocks, as they are optional and do not result in errors
 
