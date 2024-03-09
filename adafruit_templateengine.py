@@ -75,8 +75,12 @@ class TemplateSyntaxError(SyntaxError):
         super().__init__(f"{message}\n\n" + self._underline_token_in_template(token))
 
     @staticmethod
+    def _skipped_lines_message(nr_of_lines: int) -> str:
+        return f"[{nr_of_lines} line{'s' if nr_of_lines > 1 else ''} skipped]"
+
+    @classmethod
     def _underline_token_in_template(
-        token: Token, *, lines_around: int = 4, symbol: str = "^"
+        cls, token: Token, *, lines_around: int = 4, symbol: str = "^"
     ) -> str:
         """
         Return ``number_of_lines`` lines before and after the token, with the token content underlined
@@ -96,15 +100,16 @@ class TemplateSyntaxError(SyntaxError):
 
         template_before_token = token.template[: token.start_position]
         if (skipped_lines := template_before_token.count("\n") - lines_around) > 0:
-            template_before_token = f"[{skipped_lines} lines skipped]\n" + "\n".join(
-                template_before_token.split("\n")[-(lines_around + 1) :]
+            template_before_token = (
+                f"{cls._skipped_lines_message(skipped_lines)}\n"
+                + "\n".join(template_before_token.split("\n")[-(lines_around + 1) :])
             )
 
         template_after_token = token.template[token.end_position :]
         if (skipped_lines := template_after_token.count("\n") - lines_around) > 0:
             template_after_token = (
                 "\n".join(template_after_token.split("\n")[: (lines_around + 1)])
-                + f"\n[{skipped_lines} lines skipped]"
+                + f"\n{cls._skipped_lines_message(skipped_lines)}"
             )
 
         lines_before_line_with_token = template_before_token.rsplit("\n", 1)[0]
