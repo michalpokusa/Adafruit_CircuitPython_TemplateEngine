@@ -99,14 +99,14 @@ class TemplateSyntaxError(SyntaxError):
         """
 
         template_before_token = token.template[: token.start_position]
-        if (skipped_lines := template_before_token.count("\n") - lines_around) > 0:
+        if skipped_lines := template_before_token.count("\n") - lines_around:
             template_before_token = (
                 f"{cls._skipped_lines_message(skipped_lines)}\n"
                 + "\n".join(template_before_token.split("\n")[-(lines_around + 1) :])
             )
 
         template_after_token = token.template[token.end_position :]
-        if (skipped_lines := template_after_token.count("\n") - lines_around) > 0:
+        if skipped_lines := template_after_token.count("\n") - lines_around:
             template_after_token = (
                 "\n".join(template_after_token.split("\n")[: (lines_around + 1)])
                 + f"\n{cls._skipped_lines_message(skipped_lines)}"
@@ -264,12 +264,12 @@ def _find_block(template: str):
     return _BLOCK_PATTERN.search(template)
 
 
+def _find_endblock(template: str, name: str = r"\w+?"):
+    return re.search(r"{% endblock " + name + r" %}", template)
+
+
 def _find_include(template: str):
     return _INCLUDE_PATTERN.search(template)
-
-
-def _find_named_endblock(template: str, name: str):
-    return re.search(r"{% endblock " + name + r" %}", template)
 
 
 def _exists_and_is_file(path: str) -> bool:
@@ -303,11 +303,14 @@ def _resolve_includes_blocks_and_extends(template: str):
 
     # Processing nested child templates
     while (extends_match := _find_extends(template)) is not None:
-        extended_template_name = extends_match.group(0)[12:-4]
+        extended_template_path = extends_match.group(0)[12:-4]
+
+        if not _exists_and_is_file(extended_template_path):
+            raise OSError(f"Template file not found: {extended_template_path}")
 
         # Load extended template
         with open(
-            extended_template_name, "rt", encoding="utf-8"
+            extended_template_path, "rt", encoding="utf-8"
         ) as extended_template_file:
             extended_template = extended_template_file.read()
 
@@ -316,13 +319,35 @@ def _resolve_includes_blocks_and_extends(template: str):
         # Resolve includes
         template = _resolve_includes(template)
 
+        # Check for any stacked extends
+        if stacked_extends_match := _find_extends(template[extends_match.end() :]):
+            raise TemplateSyntaxError(
+                "Incorrect use of {% extends ... %}",
+                Token(
+                    template,
+                    extends_match.end() + stacked_extends_match.start(),
+                    extends_match.end() + stacked_extends_match.end(),
+                ),
+            )
+
         # Save block replacements
         while (block_match := _find_block(template[offset:])) is not None:
             block_name = block_match.group(0)[9:-3]
 
-            endblock_match = _find_named_endblock(template[offset:], block_name)
+            # Check for any unopened endblock tags before current block
+            if unopened_endblock_match := _find_endblock(
+                template[offset : offset + block_match.start()]
+            ):
+                raise TemplateSyntaxError(
+                    "No matching {% block %}",
+                    Token(
+                        template,
+                        offset + unopened_endblock_match.start(),
+                        offset + unopened_endblock_match.end(),
+                    ),
+                )
 
-            if endblock_match is None:
+            if not (endblock_match := _find_endblock(template[offset:], block_name)):
                 raise TemplateSyntaxError(
                     "No matching {% endblock %}",
                     Token(
@@ -370,7 +395,7 @@ def _replace_blocks_with_replacements(template: str, replacements: "dict[str, st
         block_name = block_match.group(0)[9:-3]
 
         # Self-closing block tag without default content
-        if (endblock_match := _find_named_endblock(template, block_name)) is None:
+        if (endblock_match := _find_endblock(template, block_name)) is None:
             replacement = replacements.get(block_name, "")
 
             template = (
@@ -635,6 +660,14 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
                     raise TemplateSyntaxError("No matching {% autoescape ... %}", token)
 
                 nested_autoescape_modes.pop()
+
+            # Token is a endblock in top-level template
+            elif token.content.startswith(r"{% endblock "):
+                raise TemplateSyntaxError("No matching {% block ... %}", token)
+
+            # Token is a extends in top-level template
+            elif token.content.startswith(r"{% extends "):
+                raise TemplateSyntaxError("Incorrect use of {% extends ... %}", token)
 
             else:
                 raise TemplateSyntaxError(f"Unknown token: {token.content}", token)
