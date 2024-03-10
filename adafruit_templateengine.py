@@ -272,6 +272,22 @@ def _find_include(template: str):
     return _INCLUDE_PATTERN.search(template)
 
 
+def _find_hash_comment(template: str):
+    return _HASH_COMMENT_PATTERN.search(template)
+
+
+def _find_block_comment(template: str):
+    return _BLOCK_COMMENT_PATTERN.search(template)
+
+
+def _find_token(template: str):
+    return _TOKEN_PATTERN.search(template)
+
+
+def _token_is_on_own_line(text_before_token: str) -> bool:
+    return _LSTRIP_BLOCK_PATTERN.search(text_before_token) is not None
+
+
 def _exists_and_is_file(path: str) -> bool:
     try:
         return (os.stat(path)[0] & 0b_11110000_00000000) == 0b_10000000_00000000
@@ -456,14 +472,6 @@ def _replace_blocks_with_replacements(template: str, replacements: "dict[str, st
     return template
 
 
-def _find_hash_comment(template: str):
-    return _HASH_COMMENT_PATTERN.search(template)
-
-
-def _find_block_comment(template: str):
-    return _BLOCK_COMMENT_PATTERN.search(template)
-
-
 def _remove_comments(
     template: str,
     *,
@@ -495,14 +503,6 @@ def _remove_comments(
         template = _remove_matched_comment(template, comment_match)
 
     return template
-
-
-def _find_token(template: str):
-    return _TOKEN_PATTERN.search(template)
-
-
-def _token_is_on_own_line(text_before_token: str) -> bool:
-    return _LSTRIP_BLOCK_PATTERN.search(text_before_token) is not None
 
 
 def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too-many-branches,too-many-statements
