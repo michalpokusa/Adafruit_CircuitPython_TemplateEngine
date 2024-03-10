@@ -831,6 +831,10 @@ class FileTemplate(Template):
         :param str template_path: Path to a file containing the template to be rendered
         :param str language: Language for autoescaping. Defaults to HTML
         """
+
+        if not _exists_and_is_file(template_path):
+            raise OSError(f"Template file not found: {template_path}")
+
         with open(template_path, "rt", encoding="utf-8") as template_file:
             template_string = template_file.read()
         super().__init__(template_string, language=language)
