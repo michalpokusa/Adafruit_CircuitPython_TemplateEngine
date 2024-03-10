@@ -299,6 +299,7 @@ def _resolve_includes(template: str):
 
 
 def _resolve_includes_blocks_and_extends(template: str):
+    extended_templates: "set[str]" = set()
     block_replacements: "dict[str, str]" = {}
 
     # Processing nested child templates
@@ -307,6 +308,19 @@ def _resolve_includes_blocks_and_extends(template: str):
 
         if not _exists_and_is_file(extended_template_path):
             raise OSError(f"Template file not found: {extended_template_path}")
+
+        # Check for circular extends
+        if extended_template_path in extended_templates:
+            raise TemplateSyntaxError(
+                f"Circular extends",
+                Token(
+                    template,
+                    extends_match.start(),
+                    extends_match.end(),
+                ),
+            )
+        else:
+            extended_templates.add(extended_template_path)
 
         # Load extended template
         with open(
@@ -334,16 +348,16 @@ def _resolve_includes_blocks_and_extends(template: str):
         while (block_match := _find_block(template[offset:])) is not None:
             block_name = block_match.group(0)[9:-3]
 
-            # Check for any unopened endblock tags before current block
-            if unopened_endblock_match := _find_endblock(
+            # Check for any tokens between blocks
+            if token_between_blocks_match := _find_token(
                 template[offset : offset + block_match.start()]
             ):
                 raise TemplateSyntaxError(
-                    "No matching {% block %}",
+                    "Token between blocks",
                     Token(
                         template,
-                        offset + unopened_endblock_match.start(),
-                        offset + unopened_endblock_match.end(),
+                        offset + token_between_blocks_match.start(),
+                        offset + token_between_blocks_match.end(),
                     ),
                 )
 
