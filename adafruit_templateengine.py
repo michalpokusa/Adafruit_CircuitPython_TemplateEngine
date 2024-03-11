@@ -79,9 +79,9 @@ class TemplateNotFoundError(OSError):
 class TemplateSyntaxError(SyntaxError):
     """Raised when a syntax error is encountered in a template."""
 
-    def __init__(self, message: str, token: Token):
+    def __init__(self, token: Token, reason: str):
         """Provided token is not a valid template syntax at the specified position."""
-        super().__init__(f"{message}\n\n" + self._underline_token_in_template(token))
+        super().__init__(self._underline_token_in_template(token) + f"\n\n{reason}")
 
     @staticmethod
     def _skipped_lines_message(nr_of_lines: int) -> str:
@@ -92,8 +92,8 @@ class TemplateSyntaxError(SyntaxError):
         cls, token: Token, *, lines_around: int = 4, symbol: str = "^"
     ) -> str:
         """
-        Return ``number_of_lines`` lines before and after the token, with the token content underlined
-        with ``symbol`` e.g.:
+        Return ``number_of_lines`` lines before and after ``token``, with the token content
+        underlined with ``symbol`` e.g.:
 
         ```html
         [8 lines skipped]
@@ -337,17 +337,16 @@ def _resolve_includes_blocks_and_extends(template: str):
         # Check for circular extends
         if extended_template_path in extended_templates:
             raise TemplateSyntaxError(
-                f"Circular extends",
                 Token(
                     template,
                     extends_match.start(),
                     extends_match.end(),
                 ),
+                "Circular extends",
             )
-        else:
-            extended_templates.add(extended_template_path)
 
         # Load extended template
+        extended_templates.add(extended_template_path)
         with open(
             extended_template_path, "rt", encoding="utf-8"
         ) as extended_template_file:
@@ -361,12 +360,12 @@ def _resolve_includes_blocks_and_extends(template: str):
         # Check for any stacked extends
         if stacked_extends_match := _find_extends(template[extends_match.end() :]):
             raise TemplateSyntaxError(
-                "Incorrect use of {% extends ... %}",
                 Token(
                     template,
                     extends_match.end() + stacked_extends_match.start(),
                     extends_match.end() + stacked_extends_match.end(),
                 ),
+                "Incorrect use of {% extends ... %}",
             )
 
         # Save block replacements
@@ -378,22 +377,22 @@ def _resolve_includes_blocks_and_extends(template: str):
                 template[offset : offset + block_match.start()]
             ):
                 raise TemplateSyntaxError(
-                    "Token between blocks",
                     Token(
                         template,
                         offset + token_between_blocks_match.start(),
                         offset + token_between_blocks_match.end(),
                     ),
+                    "Token between blocks",
                 )
 
             if not (endblock_match := _find_endblock(template[offset:], block_name)):
                 raise TemplateSyntaxError(
-                    "No matching {% endblock %}",
                     Token(
                         template,
                         offset + block_match.start(),
                         offset + block_match.end(),
                     ),
+                    "No matching {% endblock %}",
                 )
 
             block_content = template[
@@ -403,12 +402,12 @@ def _resolve_includes_blocks_and_extends(template: str):
             # Check for unsupported nested blocks
             if (nested_block_match := _find_block(block_content)) is not None:
                 raise TemplateSyntaxError(
-                    "Nested blocks are not supported",
                     Token(
                         template,
                         offset + block_match.end() + nested_block_match.start(),
                         offset + block_match.end() + nested_block_match.end(),
                     ),
+                    "Nested blocks are not supported",
                 )
 
             if block_name in block_replacements:
@@ -450,12 +449,12 @@ def _replace_blocks_with_replacements(template: str, replacements: "dict[str, st
             # Check for unsupported nested blocks
             if (nested_block_match := _find_block(block_content)) is not None:
                 raise TemplateSyntaxError(
-                    "Nested blocks are not supported",
                     Token(
                         template,
                         block_match.end() + nested_block_match.start(),
                         block_match.end() + nested_block_match.end(),
                     ),
+                    "Nested blocks are not supported",
                 )
 
             # No replacement for this block, use default content
@@ -602,7 +601,7 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
                 nested_if_statements.append(token)
             elif token.content.startswith(r"{% elif "):
                 if not nested_if_statements:
-                    raise TemplateSyntaxError("No matching {% if ... %}", token)
+                    raise TemplateSyntaxError(token, "No matching {% if ... %}")
 
                 indentation_level -= 1
                 function_string += (
@@ -611,14 +610,14 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
                 indentation_level += 1
             elif token.content == r"{% else %}":
                 if not nested_if_statements:
-                    raise TemplateSyntaxError("No matching {% if ... %}", token)
+                    raise TemplateSyntaxError(token, "No matching {% if ... %}")
 
                 indentation_level -= 1
                 function_string += indent * indentation_level + "else:\n"
                 indentation_level += 1
             elif token.content == r"{% endif %}":
                 if not nested_if_statements:
-                    raise TemplateSyntaxError("No matching {% if ... %}", token)
+                    raise TemplateSyntaxError(token, "No matching {% if ... %}")
 
                 indentation_level -= 1
                 nested_if_statements.pop()
@@ -633,7 +632,7 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
                 nested_for_loops.append(token)
             elif token.content == r"{% empty %}":
                 if not nested_for_loops:
-                    raise TemplateSyntaxError("No matching {% for ... %}", token)
+                    raise TemplateSyntaxError(token, "No matching {% for ... %}")
 
                 indentation_level -= 1
                 last_forloop_iterable = (
@@ -645,7 +644,7 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
                 indentation_level += 1
             elif token.content == r"{% endfor %}":
                 if not nested_for_loops:
-                    raise TemplateSyntaxError("No matching {% for ... %}", token)
+                    raise TemplateSyntaxError(token, "No matching {% for ... %}")
 
                 indentation_level -= 1
                 nested_for_loops.pop()
@@ -660,7 +659,7 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
                 nested_while_loops.append(token)
             elif token.content == r"{% endwhile %}":
                 if not nested_while_loops:
-                    raise TemplateSyntaxError("No matching {% while ... %}", token)
+                    raise TemplateSyntaxError(token, "No matching {% while ... %}")
 
                 indentation_level -= 1
                 nested_while_loops.pop()
@@ -680,23 +679,23 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
 
             elif token.content == r"{% endautoescape %}":
                 if not nested_autoescape_modes:
-                    raise TemplateSyntaxError("No matching {% autoescape ... %}", token)
+                    raise TemplateSyntaxError(token, "No matching {% autoescape ... %}")
 
                 nested_autoescape_modes.pop()
 
             # Token is a endblock in top-level template
             elif token.content.startswith(r"{% endblock "):
-                raise TemplateSyntaxError("No matching {% block ... %}", token)
+                raise TemplateSyntaxError(token, "No matching {% block ... %}")
 
             # Token is a extends in top-level template
             elif token.content.startswith(r"{% extends "):
-                raise TemplateSyntaxError("Incorrect use of {% extends ... %}", token)
+                raise TemplateSyntaxError(token, "Incorrect use of {% extends ... %}")
 
             else:
-                raise TemplateSyntaxError(f"Unknown token: {token.content}", token)
+                raise TemplateSyntaxError(token, f"Unknown token: {token.content}")
 
         else:
-            raise TemplateSyntaxError(f"Unknown token: {token.content}", token)
+            raise TemplateSyntaxError(token, f"Unknown token: {token.content}")
 
         # Move offset to the end of the token
         offset += token_match.end()
@@ -704,15 +703,15 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
     # Checking for unclosed blocks
     if len(nested_if_statements) > 0:
         last_if_statement = nested_if_statements[-1]
-        raise TemplateSyntaxError("No matching {% endif %}", last_if_statement)
+        raise TemplateSyntaxError(last_if_statement, "No matching {% endif %}")
 
     if len(nested_for_loops) > 0:
         last_for_loop = nested_for_loops[-1]
-        raise TemplateSyntaxError("No matching {% endfor %}", last_for_loop)
+        raise TemplateSyntaxError(last_for_loop, "No matching {% endfor %}")
 
     if len(nested_while_loops) > 0:
         last_while_loop = nested_while_loops[-1]
-        raise TemplateSyntaxError("No matching {% endwhile %}", last_while_loop)
+        raise TemplateSyntaxError(last_while_loop, "No matching {% endwhile %}")
 
     # No check for unclosed autoescape blocks, as they are optional and do not result in errors
 
