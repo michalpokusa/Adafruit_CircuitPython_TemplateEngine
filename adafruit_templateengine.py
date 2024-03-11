@@ -68,10 +68,19 @@ class Token:  # pylint: disable=too-few-public-methods
         self.content = template[start_position:end_position]
 
 
+class TemplateNotFoundError(OSError):
+    """Raised when a template file is not found."""
+
+    def __init__(self, path: str):
+        """Specified template file that was not found."""
+        super().__init__(f"Template file not found: {path}")
+
+
 class TemplateSyntaxError(SyntaxError):
     """Raised when a syntax error is encountered in a template."""
 
     def __init__(self, message: str, token: Token):
+        """Provided token is not a valid template syntax at the specified position."""
         super().__init__(f"{message}\n\n" + self._underline_token_in_template(token))
 
     @staticmethod
@@ -302,7 +311,7 @@ def _resolve_includes(template: str):
         # TODO: Restrict include to specific directory
 
         if not _exists_and_is_file(template_path):
-            raise OSError(f"Template file not found: {template_path}")
+            raise TemplateNotFoundError(template_path)
 
         # Replace the include with the template content
         with open(template_path, "rt", encoding="utf-8") as template_file:
@@ -323,7 +332,7 @@ def _resolve_includes_blocks_and_extends(template: str):
         extended_template_path = extends_match.group(0)[12:-4]
 
         if not _exists_and_is_file(extended_template_path):
-            raise OSError(f"Template file not found: {extended_template_path}")
+            raise TemplateNotFoundError(extended_template_path)
 
         # Check for circular extends
         if extended_template_path in extended_templates:
@@ -833,7 +842,7 @@ class FileTemplate(Template):
         """
 
         if not _exists_and_is_file(template_path):
-            raise OSError(f"Template file not found: {template_path}")
+            raise TemplateNotFoundError(template_path)
 
         with open(template_path, "rt", encoding="utf-8") as template_file:
             template_string = template_file.read()
