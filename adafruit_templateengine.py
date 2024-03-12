@@ -848,12 +848,16 @@ class FileTemplate(Template):
         super().__init__(template_string, language=language)
 
 
+_CACHE: "dict[int, Template| FileTemplate]" = {}
+
+
 def render_string_iter(
     template_string: str,
     context: dict = None,
     *,
     chunk_size: int = None,
     language: str = Language.HTML,
+    cache: bool = True,
 ):
     """
     Creates a `Template` from the given ``template_string`` and renders it using the provided
@@ -863,6 +867,7 @@ def render_string_iter(
     :param int chunk_size: Size of the chunks to be yielded. If ``None``, the generator yields
         the template in chunks sized specifically for the given template
     :param str language: Language for autoescaping. Defaults to HTML
+    :param bool cache: When ``True``, the template is saved and reused on next calls.
 
     Example::
 
@@ -872,8 +877,20 @@ def render_string_iter(
         list(render_string_iter(r"Hello {{ name }}!", {"name": "CircuitPython"}, chunk_size=3))
         # ['Hel', 'lo ', 'Cir', 'cui', 'tPy', 'tho', 'n!']
     """
-    return Template(template_string, language=language).render_iter(
-        context or {}, chunk_size=chunk_size
+    key = hash(template_string)
+
+    if cache and key in _CACHE:
+        return _yield_as_sized_chunks(
+            _CACHE[key].render_iter(context or {}, chunk_size), chunk_size
+        )
+
+    template = Template(template_string, language=language)
+
+    if cache:
+        _CACHE[key] = template
+
+    return _yield_as_sized_chunks(
+        template.render_iter(context or {}), chunk_size=chunk_size
     )
 
 
@@ -882,6 +899,7 @@ def render_string(
     context: dict = None,
     *,
     language: str = Language.HTML,
+    cache: bool = True,
 ):
     """
     Creates a `Template` from the given ``template_string`` and renders it using the provided
@@ -889,13 +907,24 @@ def render_string(
 
     :param dict context: Dictionary containing the context for the template
     :param str language: Language for autoescaping. Defaults to HTML
+    :param bool cache: When ``True``, the template is saved and reused on next calls.
 
     Example::
 
         render_string(r"Hello {{ name }}!", {"name": "World"})
         # 'Hello World!'
     """
-    return Template(template_string, language=language).render(context or {})
+    key = hash(template_string)
+
+    if cache and key in _CACHE:
+        return _CACHE[key].render(context or {})
+
+    template = Template(template_string, language=language)
+
+    if cache:
+        _CACHE[key] = template
+
+    return template.render(context or {})
 
 
 def render_template_iter(
@@ -904,6 +933,7 @@ def render_template_iter(
     *,
     chunk_size: int = None,
     language: str = Language.HTML,
+    cache: bool = True,
 ):
     """
     Creates a `FileTemplate` from the given ``template_path`` and renders it using the provided
@@ -913,6 +943,7 @@ def render_template_iter(
     :param int chunk_size: Size of the chunks to be yielded. If ``None``, the generator yields
         the template in chunks sized specifically for the given template
     :param str language: Language for autoescaping. Defaults to HTML
+    :param bool cache: When ``True``, the template is saved and reused on next calls.
 
     Example::
 
@@ -922,8 +953,20 @@ def render_template_iter(
         list(render_template_iter(..., {"name": "CircuitPython"}, chunk_size=3))
         # ['Hel', 'lo ', 'Cir', 'cui', 'tPy', 'tho', 'n!']
     """
-    return FileTemplate(template_path, language=language).render_iter(
-        context or {}, chunk_size=chunk_size
+    key = hash(template_path)
+
+    if cache and key in _CACHE:
+        return _yield_as_sized_chunks(
+            _CACHE[key].render_iter(context or {}, chunk_size), chunk_size
+        )
+
+    template = FileTemplate(template_path, language=language)
+
+    if cache:
+        _CACHE[key] = template
+
+    return _yield_as_sized_chunks(
+        template.render_iter(context or {}, chunk_size=chunk_size), chunk_size
     )
 
 
@@ -932,6 +975,7 @@ def render_template(
     context: dict = None,
     *,
     language: str = Language.HTML,
+    cache: bool = True,
 ):
     """
     Creates a `FileTemplate` from the given ``template_path`` and renders it using the provided
@@ -939,10 +983,22 @@ def render_template(
 
     :param dict context: Dictionary containing the context for the template
     :param str language: Language for autoescaping. Defaults to HTML
+    :param bool cache: When ``True``, the template is saved and reused on next calls.
 
     Example::
 
         render_template(..., {"name": "World"}) # r"Hello {{ name }}!"
         # 'Hello World!'
     """
-    return FileTemplate(template_path, language=language).render(context or {})
+
+    key = hash(template_path)
+
+    if cache and key in _CACHE:
+        return _CACHE[key].render(context or {})
+
+    template = FileTemplate(template_path, language=language)
+
+    if cache:
+        _CACHE[key] = template
+
+    return template.render(context or {})
