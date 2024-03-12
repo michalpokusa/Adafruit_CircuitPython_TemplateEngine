@@ -42,21 +42,6 @@ finally:
     del implementation
 
 
-class Language:  # pylint: disable=too-few-public-methods
-    """
-    Enum-like class that contains languages supported for escaping.
-    """
-
-    HTML = "html"
-    """HTML language"""
-
-    XML = "xml"
-    """XML language"""
-
-    MARKDOWN = "markdown"
-    """Markdown language"""
-
-
 class Token:  # pylint: disable=too-few-public-methods
     """Stores a token with its position in a template."""
 
@@ -198,59 +183,6 @@ def safe_html(value: Any) -> str:
         .replace("|", "&vert;")
         .replace("~", "&tilde;")
         .replace("$", "&dollar;")
-    )
-
-
-def safe_xml(value: Any) -> str:
-    """
-    Encodes unsafe symbols in ``value`` to XML entities and returns the string that can be safely
-    used in XML.
-
-    Example::
-
-        safe_xml('<a href="https://circuitpython.org/">CircuitPython</a>')
-        # &lt;a href=&quot;https://circuitpython.org/&quot;&gt;CircuitPython&lt;/a&gt;
-    """
-
-    return (
-        str(value)
-        .replace("&", "&amp;")
-        .replace('"', "&quot;")
-        .replace("'", "&apos;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
-
-
-def safe_markdown(value: Any) -> str:
-    """
-    Encodes unsafe symbols in ``value`` and returns the string that can be safely used in Markdown.
-
-    Example::
-
-        safe_markdown('[CircuitPython](https://circuitpython.org/)')
-        # \\[CircuitPython\\]\\(https://circuitpython.org/\\)
-    """
-
-    return (
-        str(value)
-        .replace("_", "\\_")
-        .replace("-", "\\-")
-        .replace("!", "\\!")
-        .replace("(", "\\(")
-        .replace(")", "\\)")
-        .replace("[", "\\[")
-        .replace("]", "\\]")
-        .replace("*", "\\*")
-        .replace("*", "\\*")
-        .replace("&", "\\&")
-        .replace("#", "\\#")
-        .replace("`", "\\`")
-        .replace("+", "\\+")
-        .replace("<", "\\<")
-        .replace(">", "\\>")
-        .replace("|", "\\|")
-        .replace("~", "\\~")
     )
 
 
@@ -515,7 +447,6 @@ def _remove_comments(
 
 def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too-many-branches,too-many-statements
     template: str,
-    language: str = Language.HTML,
     *,
     trim_blocks: bool = True,
     lstrip_blocks: bool = True,
@@ -575,11 +506,11 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
             else:
                 autoescape = True
 
-            # Expression should be escaped with language-specific function
+            # Expression should be escaped
             if autoescape:
                 function_string += (
                     indent * indentation_level
-                    + f"yield safe_{language.lower()}({token.content[3:-3]})\n"
+                    + f"yield safe_html({token.content[3:-3]})\n"
                 )
             # Expression should not be escaped
             else:
@@ -761,22 +692,13 @@ class Template:
 
     _template_function: "Generator[str]"
 
-    def __init__(self, template_string: str, *, language: str = Language.HTML) -> None:
+    def __init__(self, template_string: str) -> None:
         """
         Creates a reusable template from the given template string.
 
-        For better performance, instantiate the template in global scope and reuse it as many times.
-        If memory is a concern, instantiate the template in a function or method that uses it.
-
-        By default, the template is rendered as HTML. To render it as XML or Markdown, use the
-        ``language`` parameter.
-
         :param str template_string: String containing the template to be rendered
-        :param str language: Language for autoescaping. Defaults to HTML
         """
-        self._template_function = _create_template_rendering_function(
-            template_string, language
-        )
+        self._template_function = _create_template_rendering_function(template_string)
 
     def render_iter(
         self, context: dict = None, *, chunk_size: int = None
@@ -826,18 +748,11 @@ class FileTemplate(Template):
     Class that loads a template from a file and allows to rendering it with different contexts.
     """
 
-    def __init__(self, template_path: str, *, language: str = Language.HTML) -> None:
+    def __init__(self, template_path: str) -> None:
         """
         Loads a file and creates a reusable template from its contents.
 
-        For better performance, instantiate the template in global scope and reuse it as many times.
-        If memory is a concern, instantiate the template in a function or method that uses it.
-
-        By default, the template is rendered as HTML. To render it as XML or Markdown, use the
-        ``language`` parameter.
-
         :param str template_path: Path to a file containing the template to be rendered
-        :param str language: Language for autoescaping. Defaults to HTML
         """
 
         if not _exists_and_is_file(template_path):
@@ -845,7 +760,7 @@ class FileTemplate(Template):
 
         with open(template_path, "rt", encoding="utf-8") as template_file:
             template_string = template_file.read()
-        super().__init__(template_string, language=language)
+        super().__init__(template_string)
 
 
 _CACHE: "dict[int, Template| FileTemplate]" = {}
@@ -856,7 +771,6 @@ def render_string_iter(
     context: dict = None,
     *,
     chunk_size: int = None,
-    language: str = Language.HTML,
     cache: bool = True,
 ):
     """
@@ -866,7 +780,6 @@ def render_string_iter(
     :param dict context: Dictionary containing the context for the template
     :param int chunk_size: Size of the chunks to be yielded. If ``None``, the generator yields
         the template in chunks sized specifically for the given template
-    :param str language: Language for autoescaping. Defaults to HTML
     :param bool cache: When ``True``, the template is saved and reused on next calls.
 
     Example::
@@ -884,7 +797,7 @@ def render_string_iter(
             _CACHE[key].render_iter(context or {}, chunk_size), chunk_size
         )
 
-    template = Template(template_string, language=language)
+    template = Template(template_string)
 
     if cache:
         _CACHE[key] = template
@@ -898,7 +811,6 @@ def render_string(
     template_string: str,
     context: dict = None,
     *,
-    language: str = Language.HTML,
     cache: bool = True,
 ):
     """
@@ -906,7 +818,6 @@ def render_string(
     ``context``. Returns the rendered output as a string.
 
     :param dict context: Dictionary containing the context for the template
-    :param str language: Language for autoescaping. Defaults to HTML
     :param bool cache: When ``True``, the template is saved and reused on next calls.
 
     Example::
@@ -919,7 +830,7 @@ def render_string(
     if cache and key in _CACHE:
         return _CACHE[key].render(context or {})
 
-    template = Template(template_string, language=language)
+    template = Template(template_string)
 
     if cache:
         _CACHE[key] = template
@@ -932,7 +843,6 @@ def render_template_iter(
     context: dict = None,
     *,
     chunk_size: int = None,
-    language: str = Language.HTML,
     cache: bool = True,
 ):
     """
@@ -942,7 +852,6 @@ def render_template_iter(
     :param dict context: Dictionary containing the context for the template
     :param int chunk_size: Size of the chunks to be yielded. If ``None``, the generator yields
         the template in chunks sized specifically for the given template
-    :param str language: Language for autoescaping. Defaults to HTML
     :param bool cache: When ``True``, the template is saved and reused on next calls.
 
     Example::
@@ -960,7 +869,7 @@ def render_template_iter(
             _CACHE[key].render_iter(context or {}, chunk_size), chunk_size
         )
 
-    template = FileTemplate(template_path, language=language)
+    template = FileTemplate(template_path)
 
     if cache:
         _CACHE[key] = template
@@ -974,7 +883,6 @@ def render_template(
     template_path: str,
     context: dict = None,
     *,
-    language: str = Language.HTML,
     cache: bool = True,
 ):
     """
@@ -982,7 +890,6 @@ def render_template(
     ``context``. Returns the rendered output as a string.
 
     :param dict context: Dictionary containing the context for the template
-    :param str language: Language for autoescaping. Defaults to HTML
     :param bool cache: When ``True``, the template is saved and reused on next calls.
 
     Example::
@@ -996,7 +903,7 @@ def render_template(
     if cache and key in _CACHE:
         return _CACHE[key].render(context or {})
 
-    template = FileTemplate(template_path, language=language)
+    template = FileTemplate(template_path)
 
     if cache:
         _CACHE[key] = template
