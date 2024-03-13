@@ -777,6 +777,9 @@ def render_string_iter(
     Creates a `Template` from the given ``template_string`` and renders it using the provided
     ``context``. Returns a generator that yields the rendered output.
 
+    If ``cache`` is ``True``, the template is saved and reused on next calls, even with different
+    contexts.
+
     :param dict context: Dictionary containing the context for the template
     :param int chunk_size: Size of the chunks to be yielded. If ``None``, the generator yields
         the template in chunks sized specifically for the given template
@@ -817,6 +820,9 @@ def render_string(
     Creates a `Template` from the given ``template_string`` and renders it using the provided
     ``context``. Returns the rendered output as a string.
 
+    If ``cache`` is ``True``, the template is saved and reused on next calls, even with different
+    contexts.
+
     :param dict context: Dictionary containing the context for the template
     :param bool cache: When ``True``, the template is saved and reused on next calls.
 
@@ -848,6 +854,9 @@ def render_template_iter(
     """
     Creates a `FileTemplate` from the given ``template_path`` and renders it using the provided
     ``context``. Returns a generator that yields the rendered output.
+
+    If ``cache`` is ``True``, the template is saved and reused on next calls, even with different
+    contexts.
 
     :param dict context: Dictionary containing the context for the template
     :param int chunk_size: Size of the chunks to be yielded. If ``None``, the generator yields
@@ -888,6 +897,9 @@ def render_template(
     """
     Creates a `FileTemplate` from the given ``template_path`` and renders it using the provided
     ``context``. Returns the rendered output as a string.
+
+    If ``cache`` is ``True``, the template is saved and reused on next calls, even with different
+    contexts.
 
     :param dict context: Dictionary containing the context for the template
     :param bool cache: When ``True``, the template is saved and reused on next calls.
