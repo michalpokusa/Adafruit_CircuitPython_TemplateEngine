@@ -205,6 +205,10 @@ def _find_block(template: str):
     return _BLOCK_PATTERN.search(template)
 
 
+def _find_any_non_whitespace(template: str):
+    return re.search(r"\S+", template)
+
+
 def _find_endblock(template: str, name: str = r"\w+?"):
     return re.search(r"{% endblock " + name + r" %}", template)
 
@@ -255,7 +259,9 @@ def _resolve_includes(template: str):
     return template
 
 
-def _resolve_includes_blocks_and_extends(template: str):
+def _resolve_includes_blocks_and_extends(  # pylint: disable=,too-many-locals
+    template: str,
+):
     extended_templates: "set[str]" = set()
     block_replacements: "dict[str, str]" = {}
 
@@ -304,17 +310,17 @@ def _resolve_includes_blocks_and_extends(template: str):
         while (block_match := _find_block(template[offset:])) is not None:
             block_name = block_match.group(0)[9:-3]
 
-            # Check for any tokens between blocks
-            if token_between_blocks_match := _find_token(
+            # Check for anything between blocks
+            if content_between_blocks := _find_any_non_whitespace(
                 template[offset : offset + block_match.start()]
             ):
                 raise TemplateSyntaxError(
                     Token(
                         template,
-                        offset + token_between_blocks_match.start(),
-                        offset + token_between_blocks_match.end(),
+                        offset + content_between_blocks.start(),
+                        offset + content_between_blocks.end(),
                     ),
-                    "Token between blocks",
+                    "Content outside block",
                 )
 
             if not (endblock_match := _find_endblock(template[offset:], block_name)):
@@ -350,6 +356,16 @@ def _resolve_includes_blocks_and_extends(template: str):
                 block_replacements.setdefault(block_name, block_content)
 
             offset += endblock_match.end()
+
+        if content_after_last_endblock := _find_any_non_whitespace(template[offset:]):
+            raise TemplateSyntaxError(
+                Token(
+                    template,
+                    offset + content_after_last_endblock.start(),
+                    offset + content_after_last_endblock.end(),
+                ),
+                "Content outside block",
+            )
 
         template = extended_template
 
