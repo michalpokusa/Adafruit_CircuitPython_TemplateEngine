@@ -194,7 +194,7 @@ _BLOCK_COMMENT_PATTERN = re.compile(
     r"{% comment ('.*?' |\".*?\" )?%}[\s\S]*?{% endcomment %}"
 )
 _TOKEN_PATTERN = re.compile(r"{{ .+? }}|{% .+? %}")
-_LSTRIP_BLOCK_PATTERN = re.compile(r"\n( )+$")
+_LSTRIP_BLOCK_PATTERN = re.compile(r"\n +$")
 
 
 def _find_extends(template: str):
@@ -476,8 +476,12 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
     template = _remove_comments(template)
 
     # Create definition of the template function
-    function_string = f"def {function_name}({context_name}):\n"
-    indent, indentation_level = "    ", 1
+    function_def = f"def {function_name}({context_name}):\n"
+    indent_level = 1
+
+    def indented(fragment: str, end: str = "\n") -> str:
+        nonlocal indent_level
+        return "    " * indent_level + fragment + end
 
     # Keep track of the template state
     nested_if_statements: "list[Token]" = []
@@ -506,11 +510,9 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
                     text_before_token = text_before_token[1:]
 
         if text_before_token:
-            function_string += (
-                indent * indentation_level + f"yield {repr(text_before_token)}\n"
-            )
+            function_def += indented(f"yield {repr(text_before_token)}")
         else:
-            function_string += indent * indentation_level + "pass\n"
+            function_def += indented("pass")
 
         # Token is an expression
         if token.content.startswith(r"{{ "):
@@ -523,15 +525,10 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
 
             # Expression should be escaped
             if autoescape:
-                function_string += (
-                    indent * indentation_level
-                    + f"yield safe_html({token.content[3:-3]})\n"
-                )
+                function_def += indented(f"yield safe_html({token.content[3:-3]})")
             # Expression should not be escaped
             else:
-                function_string += (
-                    indent * indentation_level + f"yield str({token.content[3:-3]})\n"
-                )
+                function_def += indented(f"yield {token.content[3:-3]}")
 
         # Token is a statement
         elif token.content.startswith(r"{% "):
@@ -539,81 +536,71 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
 
             # Token is a some sort of if statement
             if token.content.startswith(r"{% if "):
-                function_string += (
-                    indent * indentation_level + f"{token.content[3:-3]}:\n"
-                )
-                indentation_level += 1
+                function_def += indented(f"if {token.content[6:-3]}:")
+                indent_level += 1
 
                 nested_if_statements.append(token)
             elif token.content.startswith(r"{% elif "):
                 if not nested_if_statements:
                     raise TemplateSyntaxError(token, "No matching {% if ... %}")
 
-                indentation_level -= 1
-                function_string += (
-                    indent * indentation_level + f"{token.content[3:-3]}:\n"
-                )
-                indentation_level += 1
+                indent_level -= 1
+                function_def += indented(f"elif {token.content[8:-3]}:")
+                indent_level += 1
             elif token.content == r"{% else %}":
                 if not nested_if_statements:
                     raise TemplateSyntaxError(token, "No matching {% if ... %}")
 
-                indentation_level -= 1
-                function_string += indent * indentation_level + "else:\n"
-                indentation_level += 1
+                indent_level -= 1
+                function_def += indented("else:")
+                indent_level += 1
             elif token.content == r"{% endif %}":
                 if not nested_if_statements:
                     raise TemplateSyntaxError(token, "No matching {% if ... %}")
 
-                indentation_level -= 1
+                indent_level -= 1
                 nested_if_statements.pop()
 
             # Token is a for loop
             elif token.content.startswith(r"{% for "):
-                function_string += (
-                    indent * indentation_level + f"{token.content[3:-3]}:\n"
-                )
-                indentation_level += 1
+                function_def += indented(f"for {token.content[7:-3]}:")
+                indent_level += 1
 
                 nested_for_loops.append(token)
             elif token.content == r"{% empty %}":
                 if not nested_for_loops:
                     raise TemplateSyntaxError(token, "No matching {% for ... %}")
 
-                indentation_level -= 1
                 last_forloop_iterable = (
                     nested_for_loops[-1].content[3:-3].split(" in ", 1)[1]
                 )
-                function_string += (
-                    indent * indentation_level + f"if not {last_forloop_iterable}:\n"
-                )
-                indentation_level += 1
+
+                indent_level -= 1
+                function_def += indented(f"if not {last_forloop_iterable}:")
+                indent_level += 1
             elif token.content == r"{% endfor %}":
                 if not nested_for_loops:
                     raise TemplateSyntaxError(token, "No matching {% for ... %}")
 
-                indentation_level -= 1
+                indent_level -= 1
                 nested_for_loops.pop()
 
             # Token is a while loop
             elif token.content.startswith(r"{% while "):
-                function_string += (
-                    indent * indentation_level + f"{token.content[3:-3]}:\n"
-                )
-                indentation_level += 1
+                function_def += indented(f"while {token.content[9:-3]}:")
+                indent_level += 1
 
                 nested_while_loops.append(token)
             elif token.content == r"{% endwhile %}":
                 if not nested_while_loops:
                     raise TemplateSyntaxError(token, "No matching {% while ... %}")
 
-                indentation_level -= 1
+                indent_level -= 1
                 nested_while_loops.pop()
 
             # Token is a Python code
             elif token.content.startswith(r"{% exec "):
-                expression = token.content[8:-3]
-                function_string += indent * indentation_level + f"{expression}\n"
+                function_def += indented(f"{token.content[8:-3]}")
 
             # Token is a autoescape mode change
             elif token.content.startswith(r"{% autoescape "):
@@ -668,12 +655,10 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
         if trim_blocks and text_after_last_token.startswith("\n"):
             text_after_last_token = text_after_last_token[1:]
 
-        function_string += (
-            indent * indentation_level + f"yield {repr(text_after_last_token)}\n"
-        )
+        function_def += indented(f"yield {repr(text_after_last_token)}")
 
     # Create and return the template function
-    exec(function_string)  # pylint: disable=exec-used
+    exec(function_def)  # pylint: disable=exec-used
     return locals()[function_name]
 
 
