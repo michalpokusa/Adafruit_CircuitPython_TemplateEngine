@@ -468,8 +468,7 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
     lstrip_blocks: bool = True,
     function_name: str = "__template_rendering_function",
     context_name: str = "context",
-    dry_run: bool = False,
-) -> "Generator[str] | str":
+) -> "Generator[str]":
     # Resolve includes, blocks and extends
     template = _resolve_includes_blocks_and_extends(template)
 
@@ -672,10 +671,6 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
         function_string += (
             indent * indentation_level + f"yield {repr(text_after_last_token)}\n"
         )
-
-    # If dry run, return the template function string
-    if dry_run:
-        return function_string
 
     # Create and return the template function
     exec(function_string)  # pylint: disable=exec-used
