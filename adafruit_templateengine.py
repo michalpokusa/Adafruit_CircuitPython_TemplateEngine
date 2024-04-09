@@ -195,6 +195,7 @@ _BLOCK_COMMENT_PATTERN = re.compile(
 )
 _TOKEN_PATTERN = re.compile(r"{{ .+? }}|{% .+? %}")
 _LSTRIP_BLOCK_PATTERN = re.compile(r"\n +$")
+_YIELD_PATTERN = re.compile(r"\n +yield ")
 
 
 def _find_extends(template: str):
@@ -231,6 +232,10 @@ def _find_token(template: str):
 
 def _token_is_on_own_line(text_before_token: str) -> bool:
     return _LSTRIP_BLOCK_PATTERN.search(text_before_token) is not None
+
+
+def _contains_any_yield_statement(function_def: str) -> bool:
+    return _YIELD_PATTERN.search(function_def) is not None
 
 
 def _exists_and_is_file(path: str) -> bool:
@@ -657,6 +662,10 @@ def _create_template_rendering_function(  # pylint: disable=,too-many-locals,too
 
         function_def += indented(f"yield {repr(text_after_last_token)}")
 
+    # Make sure the function definition contains at least one yield statement
+    if not _contains_any_yield_statement(function_def):
+        function_def += indented('yield ""')
+
     # Create and return the template function
     exec(function_def)  # pylint: disable=exec-used
     return locals()[function_name]
@@ -669,15 +678,18 @@ def _yield_as_sized_chunks(
 
     # Yield chunks with a given size
     chunk = ""
+    already_yielded = False
+
     for item in generator:
         chunk += item
 
         if chunk_size <= len(chunk):
             yield chunk[:chunk_size]
             chunk = chunk[chunk_size:]
+            already_yielded = True
 
     # Yield the last chunk
-    if chunk:
+    if chunk or not already_yielded:
         yield chunk
 
 
