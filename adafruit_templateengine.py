@@ -804,18 +804,14 @@ def render_string_iter(
     key = hash(template_string)
 
     if cache and key in _CACHE:
-        return _yield_as_sized_chunks(
-            _CACHE[key].render_iter(context or {}, chunk_size), chunk_size
-        )
+        return _CACHE[key].render_iter(context or {}, chunk_size=chunk_size)
 
     template = Template(template_string)
 
     if cache:
         _CACHE[key] = template
 
-    return _yield_as_sized_chunks(
-        template.render_iter(context or {}), chunk_size=chunk_size
-    )
+    return template.render_iter(context or {}, chunk_size=chunk_size)
 
 
 def render_string(
@@ -882,18 +878,14 @@ def render_template_iter(
     key = hash(template_path)
 
     if cache and key in _CACHE:
-        return _yield_as_sized_chunks(
-            _CACHE[key].render_iter(context or {}, chunk_size), chunk_size
-        )
+        return _CACHE[key].render_iter(context or {}, chunk_size=chunk_size)
 
     template = FileTemplate(template_path)
 
     if cache:
         _CACHE[key] = template
 
-    return _yield_as_sized_chunks(
-        template.render_iter(context or {}, chunk_size=chunk_size), chunk_size
-    )
+    return template.render_iter(context or {}, chunk_size=chunk_size)
 
 
 def render_template(
