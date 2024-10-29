@@ -771,7 +771,7 @@ class FileTemplate(Template):
         super().__init__(template_string)
 
 
-_CACHE: "dict[int, Template| FileTemplate]" = {}
+CACHED_TEMPLATES: "dict[int, Template| FileTemplate]" = {}
 
 
 def render_string_iter(
@@ -803,13 +803,13 @@ def render_string_iter(
     """
     key = hash(template_string)
 
-    if cache and key in _CACHE:
-        return _CACHE[key].render_iter(context or {}, chunk_size=chunk_size)
+    if cache and key in CACHED_TEMPLATES:
+        return CACHED_TEMPLATES[key].render_iter(context or {}, chunk_size=chunk_size)
 
     template = Template(template_string)
 
     if cache:
-        _CACHE[key] = template
+        CACHED_TEMPLATES[key] = template
 
     return template.render_iter(context or {}, chunk_size=chunk_size)
 
@@ -837,13 +837,13 @@ def render_string(
     """
     key = hash(template_string)
 
-    if cache and key in _CACHE:
-        return _CACHE[key].render(context or {})
+    if cache and key in CACHED_TEMPLATES:
+        return CACHED_TEMPLATES[key].render(context or {})
 
     template = Template(template_string)
 
     if cache:
-        _CACHE[key] = template
+        CACHED_TEMPLATES[key] = template
 
     return template.render(context or {})
 
@@ -877,13 +877,13 @@ def render_template_iter(
     """
     key = hash(template_path)
 
-    if cache and key in _CACHE:
-        return _CACHE[key].render_iter(context or {}, chunk_size=chunk_size)
+    if cache and key in CACHED_TEMPLATES:
+        return CACHED_TEMPLATES[key].render_iter(context or {}, chunk_size=chunk_size)
 
     template = FileTemplate(template_path)
 
     if cache:
-        _CACHE[key] = template
+        CACHED_TEMPLATES[key] = template
 
     return template.render_iter(context or {}, chunk_size=chunk_size)
 
@@ -912,12 +912,12 @@ def render_template(
 
     key = hash(template_path)
 
-    if cache and key in _CACHE:
-        return _CACHE[key].render(context or {})
+    if cache and key in CACHED_TEMPLATES:
+        return CACHED_TEMPLATES[key].render(context or {})
 
     template = FileTemplate(template_path)
 
     if cache:
-        _CACHE[key] = template
+        CACHED_TEMPLATES[key] = template
 
     return template.render(context or {})
