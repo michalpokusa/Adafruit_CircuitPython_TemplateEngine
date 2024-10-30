@@ -94,17 +94,21 @@ class TemplateSyntaxError(SyntaxError):
 
         template_before_token = token.template[: token.start_position]
         if skipped_lines := template_before_token.count("\n") - lines_around:
-            template_before_token = (
-                f"{cls._skipped_lines_message(skipped_lines)}\n"
-                + "\n".join(template_before_token.split("\n")[-(lines_around + 1) :])
+            template_before_token = "\n".join(
+                template_before_token.split("\n")[-(lines_around + 1) :]
             )
+
+            if 0 < skipped_lines:
+                template_before_token = f"{cls._skipped_lines_message(skipped_lines)}\n{template_before_token}"
 
         template_after_token = token.template[token.end_position :]
         if skipped_lines := template_after_token.count("\n") - lines_around:
-            template_after_token = (
-                "\n".join(template_after_token.split("\n")[: (lines_around + 1)])
-                + f"\n{cls._skipped_lines_message(skipped_lines)}"
+            template_after_token = "\n".join(
+                template_after_token.split("\n")[: (lines_around + 1)]
             )
+
+            if 0 < skipped_lines:
+                template_after_token += f"\n{cls._skipped_lines_message(skipped_lines)}"
 
         lines_before_line_with_token = template_before_token.rsplit("\n", 1)[0]
 
@@ -122,7 +126,7 @@ class TemplateSyntaxError(SyntaxError):
 
         lines_after_line_with_token = template_after_token.split("\n", 1)[-1]
 
-        return "\n".join(
+        return "\n" + "\n".join(
             [
                 lines_before_line_with_token,
                 line_with_token,
