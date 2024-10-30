@@ -93,22 +93,32 @@ class TemplateSyntaxError(SyntaxError):
         """
 
         template_before_token = token.template[: token.start_position]
-        if skipped_lines := template_before_token.count("\n") - lines_around:
+        if top_skipped_lines := template_before_token.count("\n") - lines_around:
             template_before_token = "\n".join(
                 template_before_token.split("\n")[-(lines_around + 1) :]
             )
 
-            if 0 < skipped_lines:
-                template_before_token = f"{cls._skipped_lines_message(skipped_lines)}\n{template_before_token}"
+            if 0 < top_skipped_lines:
+                before_skipped_lines_message = cls._skipped_lines_message(
+                    top_skipped_lines
+                )
+                template_before_token = (
+                    f"{before_skipped_lines_message}\n{template_before_token}"
+                )
 
         template_after_token = token.template[token.end_position :]
-        if skipped_lines := template_after_token.count("\n") - lines_around:
+        if bottom_skipped_lines := template_after_token.count("\n") - lines_around:
             template_after_token = "\n".join(
                 template_after_token.split("\n")[: (lines_around + 1)]
             )
 
-            if 0 < skipped_lines:
-                template_after_token += f"\n{cls._skipped_lines_message(skipped_lines)}"
+            if 0 < bottom_skipped_lines:
+                after_skipped_lines_message = cls._skipped_lines_message(
+                    bottom_skipped_lines
+                )
+                template_after_token = (
+                    f"{template_after_token}\n{after_skipped_lines_message}"
+                )
 
         lines_before_line_with_token = template_before_token.rsplit("\n", 1)[0]
 
