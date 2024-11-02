@@ -93,18 +93,32 @@ class TemplateSyntaxError(SyntaxError):
         """
 
         template_before_token = token.template[: token.start_position]
-        if skipped_lines := template_before_token.count("\n") - lines_around:
-            template_before_token = (
-                f"{cls._skipped_lines_message(skipped_lines)}\n"
-                + "\n".join(template_before_token.split("\n")[-(lines_around + 1) :])
+        if top_skipped_lines := template_before_token.count("\n") - lines_around:
+            template_before_token = "\n".join(
+                template_before_token.split("\n")[-(lines_around + 1) :]
             )
 
+            if 0 < top_skipped_lines:
+                top_skipped_lines_message = cls._skipped_lines_message(
+                    top_skipped_lines
+                )
+                template_before_token = (
+                    f"{top_skipped_lines_message}\n{template_before_token}"
+                )
+
         template_after_token = token.template[token.end_position :]
-        if skipped_lines := template_after_token.count("\n") - lines_around:
-            template_after_token = (
-                "\n".join(template_after_token.split("\n")[: (lines_around + 1)])
-                + f"\n{cls._skipped_lines_message(skipped_lines)}"
+        if bottom_skipped_lines := template_after_token.count("\n") - lines_around:
+            template_after_token = "\n".join(
+                template_after_token.split("\n")[: (lines_around + 1)]
             )
+
+            if 0 < bottom_skipped_lines:
+                bottom_skipped_lines_message = cls._skipped_lines_message(
+                    bottom_skipped_lines
+                )
+                template_after_token = (
+                    f"{template_after_token}\n{bottom_skipped_lines_message}"
+                )
 
         lines_before_line_with_token = template_before_token.rsplit("\n", 1)[0]
 
@@ -122,7 +136,7 @@ class TemplateSyntaxError(SyntaxError):
 
         lines_after_line_with_token = template_after_token.split("\n", 1)[-1]
 
-        return "\n".join(
+        return "\n" + "\n".join(
             [
                 lines_before_line_with_token,
                 line_with_token,
@@ -771,7 +785,7 @@ class FileTemplate(Template):
         super().__init__(template_string)
 
 
-_CACHE: "dict[int, Template| FileTemplate]" = {}
+CACHED_TEMPLATES: "dict[int, Template| FileTemplate]" = {}
 
 
 def render_string_iter(
@@ -803,19 +817,15 @@ def render_string_iter(
     """
     key = hash(template_string)
 
-    if cache and key in _CACHE:
-        return _yield_as_sized_chunks(
-            _CACHE[key].render_iter(context or {}, chunk_size), chunk_size
-        )
+    if cache and key in CACHED_TEMPLATES:
+        return CACHED_TEMPLATES[key].render_iter(context or {}, chunk_size=chunk_size)
 
     template = Template(template_string)
 
     if cache:
-        _CACHE[key] = template
+        CACHED_TEMPLATES[key] = template
 
-    return _yield_as_sized_chunks(
-        template.render_iter(context or {}), chunk_size=chunk_size
-    )
+    return template.render_iter(context or {}, chunk_size=chunk_size)
 
 
 def render_string(
@@ -841,13 +851,13 @@ def render_string(
     """
     key = hash(template_string)
 
-    if cache and key in _CACHE:
-        return _CACHE[key].render(context or {})
+    if cache and key in CACHED_TEMPLATES:
+        return CACHED_TEMPLATES[key].render(context or {})
 
     template = Template(template_string)
 
     if cache:
-        _CACHE[key] = template
+        CACHED_TEMPLATES[key] = template
 
     return template.render(context or {})
 
@@ -881,19 +891,15 @@ def render_template_iter(
     """
     key = hash(template_path)
 
-    if cache and key in _CACHE:
-        return _yield_as_sized_chunks(
-            _CACHE[key].render_iter(context or {}, chunk_size), chunk_size
-        )
+    if cache and key in CACHED_TEMPLATES:
+        return CACHED_TEMPLATES[key].render_iter(context or {}, chunk_size=chunk_size)
 
     template = FileTemplate(template_path)
 
     if cache:
-        _CACHE[key] = template
+        CACHED_TEMPLATES[key] = template
 
-    return _yield_as_sized_chunks(
-        template.render_iter(context or {}, chunk_size=chunk_size), chunk_size
-    )
+    return template.render_iter(context or {}, chunk_size=chunk_size)
 
 
 def render_template(
@@ -920,12 +926,12 @@ def render_template(
 
     key = hash(template_path)
 
-    if cache and key in _CACHE:
-        return _CACHE[key].render(context or {})
+    if cache and key in CACHED_TEMPLATES:
+        return CACHED_TEMPLATES[key].render(context or {})
 
     template = FileTemplate(template_path)
 
     if cache:
-        _CACHE[key] = template
+        CACHED_TEMPLATES[key] = template
 
     return template.render(context or {})
